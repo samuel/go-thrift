@@ -10,7 +10,7 @@ Overview
 --------
 
 So why another thrift package? While the existing one
-([thrift4go|https://github.com/pomack/thrift4go/]) works well, my philosophy
+([thrift4go](https://github.com/pomack/thrift4go/)) works well, my philosophy
 is that interface should match the language rather than being standardized
 across disparate styles.
 
@@ -24,9 +24,9 @@ as 'required'.
 
 Example struct:
 
-type User struct {
-	Id        int64    `thrift:"1,required"`
-	Name      string   `thrift:"2"`
-	PostCount int32    `thrift:"3,keepempty"`
-	Flags     []string `thrift:"4"`
-}
+    type User struct {
+        Id        int64    `thrift:"1,required"`
+        Name      string   `thrift:"2"`
+        PostCount int32    `thrift:"3,keepempty"`
+        Flags     []string `thrift:"4"`
+    }
