@@ -2,7 +2,7 @@ package thrift
 
 import (
 	"reflect"
-	// "runtime"
+	"runtime"
 )
 
 type Decoder struct {
