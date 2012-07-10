@@ -26,18 +26,31 @@ type TestStruct struct {
 }
 
 func TestKeepEmpty(t *testing.T) {
-	s := struct {
-		Str1 string `thrift:"1"`
-	}{}
 	buf := &bytes.Buffer{}
 	p := &BinaryProtocol{Writer: buf}
 	enc := &Encoder{Protocol: p}
+
+	s := struct {
+		Str1 string `thrift:"1"`
+	}{}
 	err := enc.WriteStruct(s)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if buf.Len() != 1 || buf.Bytes()[0] != 0 {
-		t.Fatal("keepempty didn't work as expected")
+		t.Fatal("missing keepempty should mean empty fields are not serialized")
+	}
+
+	buf.Reset()
+	s2 := struct {
+		Str1 string `thrift:"1,keepempty"`
+	}{}
+	err = enc.WriteStruct(s2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if buf.Len() != 8 {
+		t.Fatal("keepempty should cause empty fields to be serialized")
 	}
 }
 
