@@ -14,14 +14,14 @@ func (d *Decoder) error(err interface{}) {
 }
 
 func (d *Decoder) ReadStruct(v interface{}) (err error) {
-	// defer func() {
-	// 	if r := recover(); r != nil {
-	// 		if _, ok := r.(runtime.Error); ok {
-	// 			panic(r)
-	// 		}
-	// 		err = r.(error)
-	// 	}
-	// }()
+	defer func() {
+		if r := recover(); r != nil {
+			if _, ok := r.(runtime.Error); ok {
+				panic(r)
+			}
+			err = r.(error)
+		}
+	}()
 	vo := reflect.ValueOf(v)
 	for vo.Kind() != reflect.Ptr {
 		d.error(&UnsupportedValueError{Value: vo, Str: "pointer to struct expected"})
