@@ -21,7 +21,8 @@ type BinaryProtocol struct {
 	Reader      io.Reader
 	StrictWrite bool
 	StrictRead  bool
-	buf         [bufferSize]byte
+	rbuf        [bufferSize]byte
+	wbuf        [bufferSize]byte
 }
 
 func (p *BinaryProtocol) WriteMessageBegin(name string, messageType byte, seqid int32) (err error) {
@@ -116,34 +117,34 @@ func (p *BinaryProtocol) WriteBool(value bool) error {
 }
 
 func (p *BinaryProtocol) WriteByte(value byte) (err error) {
-	p.buf[0] = value
-	_, err = p.Writer.Write(p.buf[:1])
+	p.wbuf[0] = value
+	_, err = p.Writer.Write(p.wbuf[:1])
 	return
 }
 
 func (p *BinaryProtocol) WriteI16(value int16) (err error) {
-	b := p.buf[:2]
+	b := p.wbuf[:2]
 	binary.BigEndian.PutUint16(b, uint16(value))
 	_, err = p.Writer.Write(b)
 	return
 }
 
 func (p *BinaryProtocol) WriteI32(value int32) (err error) {
-	b := p.buf[:4]
+	b := p.wbuf[:4]
 	binary.BigEndian.PutUint32(b, uint32(value))
 	_, err = p.Writer.Write(b)
 	return
 }
 
 func (p *BinaryProtocol) WriteI64(value int64) (err error) {
-	b := p.buf[:8]
+	b := p.wbuf[:8]
 	binary.BigEndian.PutUint64(b, uint64(value))
 	_, err = p.Writer.Write(b)
 	return
 }
 
 func (p *BinaryProtocol) WriteDouble(value float64) (err error) {
-	b := p.buf[:8]
+	b := p.wbuf[:8]
 	binary.BigEndian.PutUint64(b, math.Float64bits(value))
 	_, err = p.Writer.Write(b)
 	return
@@ -270,34 +271,34 @@ func (p *BinaryProtocol) ReadBool() (bool, error) {
 }
 
 func (p *BinaryProtocol) ReadByte() (value byte, err error) {
-	_, err = io.ReadFull(p.Reader, p.buf[:1])
-	value = p.buf[0]
+	_, err = io.ReadFull(p.Reader, p.rbuf[:1])
+	value = p.rbuf[0]
 	return
 }
 
 func (p *BinaryProtocol) ReadI16() (value int16, err error) {
-	b := p.buf[:2]
+	b := p.rbuf[:2]
 	_, err = io.ReadFull(p.Reader, b)
 	value = int16(binary.BigEndian.Uint16(b))
 	return
 }
 
 func (p *BinaryProtocol) ReadI32() (value int32, err error) {
-	b := p.buf[:4]
+	b := p.rbuf[:4]
 	_, err = io.ReadFull(p.Reader, b)
 	value = int32(binary.BigEndian.Uint32(b))
 	return
 }
 
 func (p *BinaryProtocol) ReadI64() (value int64, err error) {
-	b := p.buf[:8]
+	b := p.rbuf[:8]
 	_, err = io.ReadFull(p.Reader, b)
 	value = int64(binary.BigEndian.Uint64(b))
 	return
 }
 
 func (p *BinaryProtocol) ReadDouble() (value float64, err error) {
-	b := p.buf[:8]
+	b := p.rbuf[:8]
 	_, err = io.ReadFull(p.Reader, b)
 	value = math.Float64frombits(binary.BigEndian.Uint64(b))
 	return
@@ -310,7 +311,7 @@ func (p *BinaryProtocol) ReadString() (string, error) {
 	}
 	var st []byte
 	if ln <= bufferSize {
-		st = p.buf[:ln]
+		st = p.rbuf[:ln]
 	} else {
 		st = make([]byte, ln)
 	}

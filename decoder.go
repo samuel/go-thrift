@@ -5,15 +5,19 @@ import (
 	"runtime"
 )
 
-type Decoder struct {
+type Decoder interface {
+	DecodeThrift(protocol Protocol) error
+}
+
+type decoder struct {
 	Protocol Protocol
 }
 
-func (d *Decoder) error(err interface{}) {
-	panic(err)
-}
+func DecodeStruct(protocol Protocol, v interface{}) (err error) {
+	if de, ok := v.(Decoder); ok {
+		return de.DecodeThrift(protocol)
+	}
 
-func (d *Decoder) ReadStruct(v interface{}) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			if _, ok := r.(runtime.Error); ok {
@@ -22,6 +26,7 @@ func (d *Decoder) ReadStruct(v interface{}) (err error) {
 			err = r.(error)
 		}
 	}()
+	d := &decoder{protocol}
 	vo := reflect.ValueOf(v)
 	for vo.Kind() != reflect.Ptr {
 		d.error(&UnsupportedValueError{Value: vo, Str: "pointer to struct expected"})
@@ -33,7 +38,11 @@ func (d *Decoder) ReadStruct(v interface{}) (err error) {
 	return nil
 }
 
-func (d *Decoder) readValue(ftype byte, rf reflect.Value) {
+func (d *decoder) error(err interface{}) {
+	panic(err)
+}
+
+func (d *decoder) readValue(ftype byte, rf reflect.Value) {
 	v := rf
 	if rf.Kind() == reflect.Ptr {
 		if rf.IsNil() {
@@ -166,7 +175,7 @@ func (d *Decoder) readValue(ftype byte, rf reflect.Value) {
 	return
 }
 
-func (d *Decoder) readSimpleValue(fieldType int) (val interface{}) {
+func (d *decoder) readSimpleValue(fieldType int) (val interface{}) {
 	var err error = nil
 	switch fieldType {
 	case typeBool:

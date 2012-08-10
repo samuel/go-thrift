@@ -28,12 +28,11 @@ type TestStruct struct {
 func TestKeepEmpty(t *testing.T) {
 	buf := &bytes.Buffer{}
 	p := &BinaryProtocol{Writer: buf}
-	enc := &Encoder{Protocol: p}
 
 	s := struct {
 		Str1 string `thrift:"1"`
 	}{}
-	err := enc.WriteStruct(s)
+	err := EncodeStruct(p, s)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -45,7 +44,7 @@ func TestKeepEmpty(t *testing.T) {
 	s2 := struct {
 		Str1 string `thrift:"1,keepempty"`
 	}{}
-	err = enc.WriteStruct(s2)
+	err = EncodeStruct(p, s2)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -57,12 +56,11 @@ func TestKeepEmpty(t *testing.T) {
 func TestEncodeRequired(t *testing.T) {
 	buf := &bytes.Buffer{}
 	p := &BinaryProtocol{Writer: buf}
-	enc := &Encoder{Protocol: p}
 
 	s := struct {
 		Str1 string `thrift:"1,required"`
 	}{}
-	err := enc.WriteStruct(s)
+	err := EncodeStruct(p, s)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -74,7 +72,7 @@ func TestEncodeRequired(t *testing.T) {
 	s2 := struct {
 		Str1 *string `thrift:"1,required"`
 	}{}
-	err = enc.WriteStruct(s2)
+	err = EncodeStruct(p, s2)
 	_, ok := err.(*MissingRequiredField)
 	if !ok {
 		t.Fatalf("Missing required field should throw MissingRequiredField instead of %+v", err)
@@ -98,15 +96,13 @@ func TestBasics(t *testing.T) {
 	buf := &bytes.Buffer{}
 	p := &BinaryProtocol{Writer: buf, Reader: buf, StrictWrite: true, StrictRead: false}
 
-	enc := &Encoder{Protocol: p}
-	err := enc.WriteStruct(s)
+	err := EncodeStruct(p, s)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	s2 := &TestStruct{}
-	dec := &Decoder{Protocol: p}
-	err = dec.ReadStruct(s2)
+	err = DecodeStruct(p, s2)
 	if err != nil {
 		t.Fatal(err)
 	}

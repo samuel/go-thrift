@@ -1,6 +1,7 @@
 package thrift
 
 import (
+	"fmt"
 	"reflect"
 	"sync"
 )
@@ -23,6 +24,24 @@ const (
 	typeList   = 15
 	typeUtf8   = 16
 	typeUtf16  = 17
+)
+
+const (
+	messageTypeCall      = 1
+	messageTypeReply     = 2
+	messageTypeException = 3
+	messageTypeOneway    = 4
+)
+
+const (
+	ExceptionUnknown            = 0
+	ExceptionUnknownMethod      = 1
+	ExceptionInvalidMessageType = 2
+	ExceptionWrongMethodName    = 3
+	ExceptionBadSequenceId      = 4
+	ExceptionMissingResult      = 5
+	ExceptionInternalError      = 6
+	ExceptionProtocolError      = 7
 )
 
 var (
@@ -55,6 +74,33 @@ type UnsupportedValueError struct {
 
 func (e *UnsupportedValueError) Error() string {
 	return "thrift: unsupported value: " + e.Str
+}
+
+// Application level thrift exception
+type ApplicationException struct {
+	Message string `thrift:"1"`
+	Type    int32  `thrift:"2"`
+}
+
+func (e *ApplicationException) String() string {
+	typeStr := "Unknown Exception"
+	switch e.Type {
+	case ExceptionUnknownMethod:
+		typeStr = "Unknown Method"
+	case ExceptionInvalidMessageType:
+		typeStr = "Invalid Message Type"
+	case ExceptionWrongMethodName:
+		typeStr = "Wrong Method Name"
+	case ExceptionBadSequenceId:
+		typeStr = "Bad Sequence Id"
+	case ExceptionMissingResult:
+		typeStr = "Missing Result"
+	case ExceptionInternalError:
+		typeStr = "Internal Error"
+	case ExceptionProtocolError:
+		typeStr = "Protocol Error"
+	}
+	return fmt.Sprintf("%s: %s", typeStr, e.Message)
 }
 
 func fieldType(t reflect.Type) byte {

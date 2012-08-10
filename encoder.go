@@ -5,15 +5,15 @@ import (
 	"runtime"
 )
 
-type Encoder struct {
+type Encoder interface {
+	EncodeThrift(protocol Protocol) error
+}
+
+type encoder struct {
 	Protocol Protocol
 }
 
-func (e *Encoder) error(err interface{}) {
-	panic(err)
-}
-
-func (e *Encoder) WriteStruct(v interface{}) (err error) {
+func EncodeStruct(protocol Protocol, v interface{}) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			if _, ok := r.(runtime.Error); ok {
@@ -22,12 +22,17 @@ func (e *Encoder) WriteStruct(v interface{}) (err error) {
 			err = r.(error)
 		}
 	}()
+	e := &encoder{protocol}
 	vo := reflect.ValueOf(v)
 	e.writeStruct(vo)
 	return nil
 }
 
-func (e *Encoder) writeStruct(v reflect.Value) {
+func (e *encoder) error(err interface{}) {
+	panic(err)
+}
+
+func (e *encoder) writeStruct(v reflect.Value) {
 	for v.Kind() == reflect.Ptr || v.Kind() == reflect.Interface {
 		v = v.Elem()
 	}
@@ -69,7 +74,7 @@ func (e *Encoder) writeStruct(v reflect.Value) {
 	}
 }
 
-func (e *Encoder) writeValue(v reflect.Value) {
+func (e *encoder) writeValue(v reflect.Value) {
 	var err error = nil
 	switch v.Kind() {
 	case reflect.Bool:
