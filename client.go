@@ -53,6 +53,8 @@ func (c *ClientCodec) ReadResponseHeader(response *rpc.Response) error {
 
 func (c *ClientCodec) ReadResponseBody(thriftStruct interface{}) error {
 	if thriftStruct == nil {
+		// Should only get called if ReadResponseHeader set the Error value in
+		// which case we've already read the body (ApplicationException)
 		return nil
 	}
 
