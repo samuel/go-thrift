@@ -1,0 +1,58 @@
+package thrift
+
+import (
+	"bytes"
+	"testing"
+)
+
+type ClosingBuffer struct {
+	Buffer *bytes.Buffer
+}
+
+func (c *ClosingBuffer) Bytes() []byte {
+	return c.Buffer.Bytes()
+}
+
+func (c *ClosingBuffer) Read(b []byte) (int, error) {
+	return c.Buffer.Read(b)
+}
+
+func (c *ClosingBuffer) Write(b []byte) (int, error) {
+	return c.Buffer.Write(b)
+}
+
+func (c *ClosingBuffer) Close() error {
+	return nil
+}
+
+func TestFramed(t *testing.T) {
+	buf := &ClosingBuffer{&bytes.Buffer{}}
+
+	framed := NewFramedReadWriteCloser(buf, 1024)
+	if _, err := framed.Write([]byte{1, 2, 3, 4}); err != nil {
+		t.Fatalf("Framed: error on Write %s", err)
+	}
+	if err := framed.Flush(); err != nil {
+		t.Fatalf("Framed: error on Flush %s", err)
+	}
+
+	out := buf.Bytes()
+	expected := []byte{0, 0, 0, 4, 1, 2, 3, 4}
+	if bytes.Compare(out, expected) != 0 {
+		t.Fatalf("Framed: expected output %+v but got %+v", expected, out)
+	}
+
+	buf = &ClosingBuffer{bytes.NewBuffer([]byte{0, 0, 0, 2, 5, 6})}
+	framed = NewFramedReadWriteCloser(buf, 1024)
+	out = make([]byte, 4)
+	n, err := framed.Read(out[:4])
+	if err != nil {
+		t.Fatalf("Framed: error from Read %s", err)
+	}
+	if n != 2 {
+		t.Fatalf("Framed: expected read count of 2 instead %d", n)
+	}
+	if out[0] != 5 || out[1] != 6 {
+		t.Fatalf("Framed: expected {5,6} from Read instead %+v", out[:2])
+	}
+}
