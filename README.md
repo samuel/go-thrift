@@ -1,6 +1,8 @@
 Thrift Package for Go
 =====================
 
+API Documentation: <http://go.pkgdoc.org/github.com/samuel/go-thrift>
+
 WARNING
 -------
 
