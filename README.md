@@ -55,5 +55,15 @@ RPC
 
 The standard Go net/rpc package is used to provide RPC. Although, one
 incompatibility is the net/rpc's use of ServiceName.Method for naming
-RPC methods. To get around this the thrift.ServerCodec appends method
+RPC methods. To get around this the Thrift ServerCodec prefixes method
 names with "Thrift".
+
+### Transport
+
+There are no specific transport "classes" as there are in most Thrift
+libraries. Instead, the standard `io.ReadWriteCloser` is used as the
+interface. If the value also implements the thrift.Flusher interface
+then `Flush() error` is called after `protocol.WriteMessageEnd`.
+
+_Framed transport_ is supported by wrapping a value implementing
+`io.ReadWriteCloser` with `thrift.NewFramedReadWriteCloser(value)`

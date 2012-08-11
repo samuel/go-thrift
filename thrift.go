@@ -250,7 +250,7 @@ func SkipValue(r io.Reader, p Protocol, thriftType byte) error {
 			if ftype == typeStop {
 				break
 			}
-			skipValue(r, p, ftype)
+			SkipValue(r, p, ftype)
 			if err = p.ReadFieldEnd(r); err != nil {
 				return err
 			}
@@ -263,8 +263,8 @@ func SkipValue(r io.Reader, p Protocol, thriftType byte) error {
 		}
 
 		for i := 0; i < n; i++ {
-			skipValue(r, p, keyType)
-			skipValue(r, p, valueType)
+			SkipValue(r, p, keyType)
+			SkipValue(r, p, valueType)
 		}
 
 		return p.ReadMapEnd(r)
@@ -274,7 +274,7 @@ func SkipValue(r io.Reader, p Protocol, thriftType byte) error {
 			return err
 		}
 		for i := 0; i < n; i++ {
-			skipValue(r, p, valueType)
+			SkipValue(r, p, valueType)
 		}
 		return p.ReadListEnd(r)
 	case typeSet:
@@ -283,7 +283,7 @@ func SkipValue(r io.Reader, p Protocol, thriftType byte) error {
 			return err
 		}
 		for i := 0; i < n; i++ {
-			skipValue(r, p, valueType)
+			SkipValue(r, p, valueType)
 		}
 		return p.ReadSetEnd(r)
 	}

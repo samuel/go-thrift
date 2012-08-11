@@ -28,14 +28,14 @@ func (c *serverCodec) ReadRequestHeader(request *rpc.Request) error {
 	if err != nil {
 		return err
 	}
-	request.ServiceMethod = name
+	request.ServiceMethod = "Thrift." + name
 	request.Seq = uint64(seq)
 
 	if messageType != messageTypeCall { // Currently don't support one way
 		return errors.New("Exception Call message type")
 	}
 
-	if err := skipValue(c.transport, c.protocol, typeStruct); err != nil {
+	if err := SkipValue(c.transport, c.protocol, typeStruct); err != nil {
 		return err
 	}
 
