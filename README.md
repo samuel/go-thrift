@@ -11,7 +11,9 @@ Overview
 
 So why another thrift package? While the existing one
 ([thrift4go](https://github.com/pomack/thrift4go/)) works well, my philosophy
-is that interface should match the language.
+is that interfaces should match the language. Most Thrift libraries try
+to match the API of the original which makes them awkward to use in
+other languages.
 
 As an example, Go already has the idea of a thrift transport in the
 ReadWriteCloser interfaces.
@@ -47,3 +49,11 @@ quirks and limitations.
   decided against that for now.
 * []byte get encoded/decoded as a string because the Thrift binary type
   is the same as string on the wire.
+
+RPC
+---
+
+The standard Go net/rpc package is used to provide RPC. Although, one
+incompatibility is the net/rpc's use of ServiceName.Method for naming
+RPC methods. To get around this the thrift.ServerCodec appends method
+names with "Thrift".

@@ -221,7 +221,7 @@ func encodeFields(t reflect.Type) map[int]encodeField {
 	return fs
 }
 
-func skipValue(r io.Reader, p Protocol, thriftType byte) error {
+func SkipValue(r io.Reader, p Protocol, thriftType byte) error {
 	var err error
 	switch thriftType {
 	case typeBool:
