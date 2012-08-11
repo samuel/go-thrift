@@ -1,21 +1,23 @@
 package thrift
 
 import (
+	"io"
 	"reflect"
 	"runtime"
 )
 
 type Decoder interface {
-	DecodeThrift(protocol Protocol) error
+	DecodeThrift(io.Reader, Protocol) error
 }
 
 type decoder struct {
-	Protocol Protocol
+	r io.Reader
+	p Protocol
 }
 
-func DecodeStruct(protocol Protocol, v interface{}) (err error) {
+func DecodeStruct(r io.Reader, protocol Protocol, v interface{}) (err error) {
 	if de, ok := v.(Decoder); ok {
-		return de.DecodeThrift(protocol)
+		return de.DecodeThrift(r, protocol)
 	}
 
 	defer func() {
@@ -26,7 +28,7 @@ func DecodeStruct(protocol Protocol, v interface{}) (err error) {
 			err = r.(error)
 		}
 	}()
-	d := &decoder{protocol}
+	d := &decoder{r, protocol}
 	vo := reflect.ValueOf(v)
 	for vo.Kind() != reflect.Ptr {
 		d.error(&UnsupportedValueError{Value: vo, Str: "pointer to struct expected"})
@@ -42,71 +44,86 @@ func (d *decoder) error(err interface{}) {
 	panic(err)
 }
 
-func (d *decoder) readValue(ftype byte, rf reflect.Value) {
+func (d *decoder) readValue(thriftType byte, rf reflect.Value) {
 	v := rf
-	if rf.Kind() == reflect.Ptr {
+	kind := rf.Kind()
+	if kind == reflect.Ptr {
 		if rf.IsNil() {
 			rf.Set(reflect.New(rf.Type().Elem()))
 		}
 		v = rf.Elem()
+		kind = v.Kind()
 	}
 
-	if ftype != fieldType(v.Type()) {
-		d.error(&UnsupportedValueError{Value: v, Str: "type mistmatch"})
-	}
+	// if thriftType != fieldType(v.Type()) {
+	// 	d.error(&UnsupportedValueError{Value: v, Str: "type mismatch"})
+	// }
 
 	var err error = nil
-	switch v.Kind() {
-	case reflect.Bool:
-		if val, err := d.Protocol.ReadBool(); err != nil {
+	switch thriftType {
+	case typeBool:
+		if val, err := d.p.ReadBool(d.r); err != nil {
 			d.error(err)
 		} else {
 			v.SetBool(val)
 		}
-	case reflect.Int8:
-		if val, err := d.Protocol.ReadByte(); err != nil {
+	case typeByte:
+		if val, err := d.p.ReadByte(d.r); err != nil {
 			d.error(err)
 		} else {
 			v.SetInt(int64(val))
 		}
-	case reflect.Int16:
-		if val, err := d.Protocol.ReadI16(); err != nil {
+	case typeI16:
+		if val, err := d.p.ReadI16(d.r); err != nil {
 			d.error(err)
 		} else {
 			v.SetInt(int64(val))
 		}
-	case reflect.Int32, reflect.Int:
-		if val, err := d.Protocol.ReadI32(); err != nil {
+	case typeI32:
+		if val, err := d.p.ReadI32(d.r); err != nil {
 			d.error(err)
 		} else {
 			v.SetInt(int64(val))
 		}
-	case reflect.Int64:
-		if val, err := d.Protocol.ReadI64(); err != nil {
+	case typeI64:
+		if val, err := d.p.ReadI64(d.r); err != nil {
 			d.error(err)
 		} else {
 			v.SetInt(val)
 		}
-	case reflect.Float64:
-		if val, err := d.Protocol.ReadDouble(); err != nil {
+	case typeDouble:
+		if val, err := d.p.ReadDouble(d.r); err != nil {
 			d.error(err)
 		} else {
 			v.SetFloat(val)
 		}
-	case reflect.String:
-		if val, err := d.Protocol.ReadString(); err != nil {
-			d.error(err)
+	case typeString:
+		if kind == reflect.Slice {
+			elemType := v.Type().Elem()
+			if elemType.Kind() == reflect.Uint8 && elemType.Name() == "byte" {
+				if val, err := d.p.ReadBytes(d.r); err != nil {
+					d.error(err)
+				} else {
+					v.SetBytes(val)
+				}
+			} else {
+				err = &UnsupportedValueError{Value: v, Str: "expected a byte array"}
+			}
 		} else {
-			v.SetString(val)
+			if val, err := d.p.ReadString(d.r); err != nil {
+				d.error(err)
+			} else {
+				v.SetString(val)
+			}
 		}
-	case reflect.Struct:
-		if err := d.Protocol.ReadStructBegin(); err != nil {
+	case typeStruct:
+		if err := d.p.ReadStructBegin(d.r); err != nil {
 			d.error(err)
 		}
 
 		fields := encodeFields(v.Type())
 		for {
-			ftype, id, err := d.Protocol.ReadFieldBegin()
+			ftype, id, err := d.p.ReadFieldBegin(d.r)
 			if err != nil {
 				d.error(err)
 			}
@@ -124,18 +141,18 @@ func (d *decoder) readValue(ftype byte, rf reflect.Value) {
 				d.readValue(ftype, fieldValue)
 			}
 
-			if err = d.Protocol.ReadFieldEnd(); err != nil {
+			if err = d.p.ReadFieldEnd(d.r); err != nil {
 				d.error(err)
 			}
 		}
 
-		if err := d.Protocol.ReadStructEnd(); err != nil {
+		if err := d.p.ReadStructEnd(d.r); err != nil {
 			d.error(err)
 		}
-	case reflect.Map:
+	case typeMap:
 		keyType := v.Type().Key()
 		valueType := v.Type().Elem()
-		ktype, vtype, n, err := d.Protocol.ReadMapBegin()
+		ktype, vtype, n, err := d.p.ReadMapBegin(d.r)
 		if err != nil {
 			d.error(err)
 		}
@@ -147,12 +164,34 @@ func (d *decoder) readValue(ftype byte, rf reflect.Value) {
 			d.readValue(vtype, val)
 			v.SetMapIndex(key, val)
 		}
-		if err := d.Protocol.ReadMapEnd(); err != nil {
+		if err := d.p.ReadMapEnd(d.r); err != nil {
 			d.error(err)
 		}
-	case reflect.Slice, reflect.Array:
+	case typeList:
 		elemType := v.Type().Elem()
-		et, n, err := d.Protocol.ReadListBegin()
+		if elemType.Kind() == reflect.Uint8 && elemType.Name() == "byte" {
+			if bytes, err := d.p.ReadBytes(d.r); err != nil {
+				d.error(err)
+			} else {
+				v.SetBytes(bytes)
+			}
+		} else {
+			et, n, err := d.p.ReadListBegin(d.r)
+			if err != nil {
+				d.error(err)
+			}
+			for i := 0; i < n; i++ {
+				val := reflect.New(elemType)
+				d.readValue(et, val.Elem())
+				v.Set(reflect.Append(v, val.Elem()))
+			}
+			if err := d.p.ReadListEnd(d.r); err != nil {
+				d.error(err)
+			}
+		}
+	case typeSet:
+		elemType := v.Type().Elem()
+		et, n, err := d.p.ReadSetBegin(d.r)
 		if err != nil {
 			d.error(err)
 		}
@@ -161,7 +200,7 @@ func (d *decoder) readValue(ftype byte, rf reflect.Value) {
 			d.readValue(et, val.Elem())
 			v.Set(reflect.Append(v, val.Elem()))
 		}
-		if err := d.Protocol.ReadListEnd(); err != nil {
+		if err := d.p.ReadSetEnd(d.r); err != nil {
 			d.error(err)
 		}
 	default:
@@ -179,19 +218,19 @@ func (d *decoder) readSimpleValue(fieldType int) (val interface{}) {
 	var err error = nil
 	switch fieldType {
 	case typeBool:
-		val, err = d.Protocol.ReadBool()
+		val, err = d.p.ReadBool(d.r)
 	case typeByte:
-		val, err = d.Protocol.ReadByte()
+		val, err = d.p.ReadByte(d.r)
 	case typeI16:
-		val, err = d.Protocol.ReadI16()
+		val, err = d.p.ReadI16(d.r)
 	case typeI32:
-		val, err = d.Protocol.ReadI32()
+		val, err = d.p.ReadI32(d.r)
 	case typeI64:
-		val, err = d.Protocol.ReadI64()
+		val, err = d.p.ReadI64(d.r)
 	case typeDouble:
-		val, err = d.Protocol.ReadDouble()
+		val, err = d.p.ReadDouble(d.r)
 	case typeString:
-		val, err = d.Protocol.ReadString()
+		val, err = d.p.ReadString(d.r)
 	default:
 		d.error(&UnsupportedTypeError{})
 	}

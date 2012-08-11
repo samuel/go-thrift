@@ -73,7 +73,7 @@ type UnsupportedValueError struct {
 }
 
 func (e *UnsupportedValueError) Error() string {
-	return "thrift: unsupported value: " + e.Str
+	return fmt.Sprintf("thrift: unsupported value (%+v): %s", e.Value, e.Str)
 }
 
 // Application level thrift exception
@@ -108,7 +108,7 @@ func fieldType(t reflect.Type) byte {
 	case reflect.Bool:
 		return typeBool
 	case reflect.Int8:
-		return typeBool
+		return typeByte
 	case reflect.Int16:
 		return typeI16
 	case reflect.Int32, reflect.Int:
@@ -118,7 +118,12 @@ func fieldType(t reflect.Type) byte {
 	case reflect.Map:
 		return typeMap
 	case reflect.Slice:
-		return typeList
+		elemType := t.Elem()
+		if elemType.Kind() == reflect.Uint8 && elemType.Name() == "byte" {
+			return typeString
+		} else {
+			return typeList
+		}
 	case reflect.Struct:
 		return typeStruct
 	case reflect.String:
@@ -154,6 +159,7 @@ type encodeField struct {
 	id        int
 	required  bool
 	keepEmpty bool
+	fieldType byte
 }
 
 var (
@@ -204,6 +210,9 @@ func encodeFields(t reflect.Type) map[int]encodeField {
 			ef.id = id
 			ef.required = opts.Contains("required")
 			ef.keepEmpty = opts.Contains("keepempty")
+			if opts.Contains("set") {
+				ef.fieldType = typeSet
+			}
 		}
 		fs[ef.id] = ef
 	}

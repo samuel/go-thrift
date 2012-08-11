@@ -8,11 +8,12 @@ import (
 )
 
 type TestStruct2 struct {
-	Str string `thrift:"1"`
+	Str    string `thrift:"1"`
+	Binary []byte `thrift:"2"`
 }
 
 func (t *TestStruct2) String() string {
-	return fmt.Sprintf("{Str:%s}", t.Str)
+	return fmt.Sprintf("{Str:%s Binary:%+v}", t.Str, t.Binary)
 }
 
 type TestStruct struct {
@@ -23,16 +24,17 @@ type TestStruct struct {
 	Struct  *TestStruct2      `thrift:"5"`
 	List2   []*string         `thrift:"6"`
 	Struct2 TestStruct2       `thrift:"7"`
+	Binary  []byte            `thrift:"8"`
+	Set     []string          `thrift:"9,set"`
 }
 
 func TestKeepEmpty(t *testing.T) {
 	buf := &bytes.Buffer{}
-	p := &BinaryProtocol{Writer: buf}
 
 	s := struct {
 		Str1 string `thrift:"1"`
 	}{}
-	err := EncodeStruct(p, s)
+	err := EncodeStruct(buf, DefaultBinaryProtocol, s)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -44,7 +46,7 @@ func TestKeepEmpty(t *testing.T) {
 	s2 := struct {
 		Str1 string `thrift:"1,keepempty"`
 	}{}
-	err = EncodeStruct(p, s2)
+	err = EncodeStruct(buf, DefaultBinaryProtocol, s2)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -55,12 +57,11 @@ func TestKeepEmpty(t *testing.T) {
 
 func TestEncodeRequired(t *testing.T) {
 	buf := &bytes.Buffer{}
-	p := &BinaryProtocol{Writer: buf}
 
 	s := struct {
 		Str1 string `thrift:"1,required"`
 	}{}
-	err := EncodeStruct(p, s)
+	err := EncodeStruct(buf, DefaultBinaryProtocol, s)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -72,7 +73,7 @@ func TestEncodeRequired(t *testing.T) {
 	s2 := struct {
 		Str1 *string `thrift:"1,required"`
 	}{}
-	err = EncodeStruct(p, s2)
+	err = EncodeStruct(buf, DefaultBinaryProtocol, s2)
 	_, ok := err.(*MissingRequiredField)
 	if !ok {
 		t.Fatalf("Missing required field should throw MissingRequiredField instead of %+v", err)
@@ -82,7 +83,7 @@ func TestEncodeRequired(t *testing.T) {
 func TestBasics(t *testing.T) {
 	i := 123
 	str := "bar"
-	ts2 := TestStruct2{"qwerty"}
+	ts2 := TestStruct2{"qwerty", []byte{1, 2, 3}}
 	s := &TestStruct{
 		"test",
 		&i,
@@ -91,18 +92,18 @@ func TestBasics(t *testing.T) {
 		&ts2,
 		[]*string{&str},
 		ts2,
-		// nil,
+		[]byte{1, 2, 3},
+		[]string{"a", "b"},
 	}
 	buf := &bytes.Buffer{}
-	p := &BinaryProtocol{Writer: buf, Reader: buf, StrictWrite: true, StrictRead: false}
 
-	err := EncodeStruct(p, s)
+	err := EncodeStruct(buf, DefaultBinaryProtocol, s)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	s2 := &TestStruct{}
-	err = DecodeStruct(p, s2)
+	err = DecodeStruct(buf, DefaultBinaryProtocol, s2)
 	if err != nil {
 		t.Fatal(err)
 	}

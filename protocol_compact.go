@@ -16,46 +16,44 @@ const (
 )
 
 type CompactProtocol struct {
-	Writer io.Writer
-	Reader io.Reader
-	buf    [compactBufferSize]byte
 }
 
-func (p *CompactProtocol) writeByte(value byte) (err error) {
-	p.buf[0] = value
-	_, err = p.Writer.Write(p.buf[:1])
+func (p *CompactProtocol) writeByte(w io.Writer, value byte) (err error) {
+	b := []byte{value}
+	_, err = w.Write(b[:1])
 	return
 }
 
-func (p *CompactProtocol) writeVarint(value int64) (err error) {
-	n := binary.PutVarint(p.buf[:compactBufferSize], value)
-	_, err = p.Writer.Write(p.buf[:n])
+func (p *CompactProtocol) writeVarint(w io.Writer, value int64) (err error) {
+	b := make([]byte, compactBufferSize)
+	n := binary.PutVarint(b, value)
+	_, err = w.Write(b[:n])
 	return
 }
 
-func (p *CompactProtocol) WriteMessageBegin(name string, messageType byte, seqid int32) (err error) {
-	if err = p.writeByte(compactProtocolId); err != nil {
+func (p *CompactProtocol) WriteMessageBegin(w io.Writer, name string, messageType byte, seqid int32) (err error) {
+	if err = p.writeByte(w, compactProtocolId); err != nil {
 		return
 	}
-	if err = p.writeByte(compactVersion | (messageType << compactTypeShiftAmount)); err != nil {
+	if err = p.writeByte(w, compactVersion|(messageType<<compactTypeShiftAmount)); err != nil {
 		return
 	}
-	if err = p.writeVarint(int64(seqid)); err != nil {
+	if err = p.writeVarint(w, int64(seqid)); err != nil {
 		return
 	}
-	err = p.WriteString(name)
+	err = p.WriteString(w, name)
 	return
 }
 
-func (p *CompactProtocol) WriteMessageEnd() error {
+func (p *CompactProtocol) WriteMessageEnd(w io.Writer) error {
 	return nil
 }
 
-func (p *CompactProtocol) WriteStructBegin(name string) error {
+func (p *CompactProtocol) WriteStructBegin(w io.Writer, name string) error {
 	return nil
 }
 
-func (p *CompactProtocol) WriteStructEnd() error {
+func (p *CompactProtocol) WriteStructEnd(w io.Writer) error {
 	return nil
 }
 
@@ -151,11 +149,11 @@ func (p *CompactProtocol) WriteStructEnd() error {
 // 	return
 // }
 
-func (p *CompactProtocol) WriteString(value string) (err error) {
-	if err = p.writeVarint(int64(len(value))); err != nil {
+func (p *CompactProtocol) WriteString(w io.Writer, value string) (err error) {
+	if err = p.writeVarint(w, int64(len(value))); err != nil {
 		return
 	}
-	_, err = p.Writer.Write([]byte(value))
+	_, err = w.Write([]byte(value))
 	return
 }
 

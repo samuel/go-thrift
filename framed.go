@@ -7,6 +7,10 @@ import (
 	"io"
 )
 
+const (
+	DefaultMaxFrameSize = 1024 * 1024
+)
+
 type ErrFrameTooBig struct {
 	Size    int
 	MaxSize int
@@ -28,6 +32,9 @@ type FramedReadWriteCloser struct {
 }
 
 func NewFramedReadWriteCloser(wrapped io.ReadWriteCloser, maxFrameSize int) *FramedReadWriteCloser {
+	if maxFrameSize == 0 {
+		maxFrameSize = DefaultMaxFrameSize
+	}
 	return &FramedReadWriteCloser{
 		wrapped:      wrapped,
 		maxFrameSize: maxFrameSize,

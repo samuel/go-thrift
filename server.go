@@ -2,19 +2,29 @@ package thrift
 
 import (
 	"errors"
+	"io"
 	"net/rpc"
 )
 
-type ServerCodec struct {
-	protocol Protocol
+type serverCodec struct {
+	transport io.ReadWriteCloser
+	protocol  Protocol
 }
 
-func NewServerCodec(protocol Protocol) rpc.ServerCodec {
-	return &ServerCodec{protocol}
+// ServeConn runs the Thrift RPC server on a single connection. ServeConn blocks,
+// serving the connection until the client hangs up. The caller typically invokes
+// ServeConn in a go statement.
+func ServeConn(conn io.ReadWriteCloser, protocol Protocol) {
+	rpc.ServeCodec(NewServerCodec(conn, protocol))
 }
 
-func (c *ServerCodec) ReadRequestHeader(request *rpc.Request) error {
-	name, messageType, seq, err := c.protocol.ReadMessageBegin()
+// NewServerCodec returns a new rpc.ServerCodec using Thrift RPC on conn using the specified protocol.
+func NewServerCodec(conn io.ReadWriteCloser, protocol Protocol) rpc.ServerCodec {
+	return &serverCodec{conn, protocol}
+}
+
+func (c *serverCodec) ReadRequestHeader(request *rpc.Request) error {
+	name, messageType, seq, err := c.protocol.ReadMessageBegin(c.transport)
 	if err != nil {
 		return err
 	}
@@ -36,30 +46,36 @@ func (c *ServerCodec) ReadRequestHeader(request *rpc.Request) error {
 	return nil
 }
 
-func (c *ServerCodec) ReadRequestBody(thriftStruct interface{}) error {
+func (c *serverCodec) ReadRequestBody(thriftStruct interface{}) error {
 	if thriftStruct == nil {
 		panic("TODO: Skip body in ReadRequestBody")
 	}
 
-	if err := DecodeStruct(c.protocol, thriftStruct); err != nil {
+	if err := DecodeStruct(c.transport, c.protocol, thriftStruct); err != nil {
 		return err
 	}
-	return c.protocol.ReadMessageEnd()
+	return c.protocol.ReadMessageEnd(c.transport)
 }
 
-func (c *ServerCodec) WriteResponse(response *rpc.Response, thriftStruct interface{}) error {
-	if err := c.protocol.WriteMessageBegin(response.ServiceMethod, messageTypeReply, int32(response.Seq)); err != nil {
+func (c *serverCodec) WriteResponse(response *rpc.Response, thriftStruct interface{}) error {
+	if err := c.protocol.WriteMessageBegin(c.transport, response.ServiceMethod, messageTypeReply, int32(response.Seq)); err != nil {
 		return err
 	}
 	if response.Error != "" {
 		thriftStruct = &ApplicationException{response.Error, ExceptionUnknown}
 	}
-	if err := EncodeStruct(c.protocol, thriftStruct); err != nil {
+	if err := EncodeStruct(c.transport, c.protocol, thriftStruct); err != nil {
 		return err
 	}
-	return c.protocol.WriteMessageEnd()
+	if err := c.protocol.WriteMessageEnd(c.transport); err != nil {
+		return err
+	}
+	if flusher, ok := c.transport.(Flusher); ok {
+		return flusher.Flush()
+	}
+	return nil
 }
 
-func (c *ServerCodec) Close() error {
+func (c *serverCodec) Close() error {
 	return nil
 }

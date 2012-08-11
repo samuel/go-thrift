@@ -52,7 +52,7 @@ func (s *ScribeClient) Log(messages []*LogEntry) (ResultCode, error) {
 }
 
 func TestClient(t *testing.T) {
-	c, err := Dial("tcp", "localhost:1463")
+	c, err := Dial("tcp", "localhost:1463", true, DefaultBinaryProtocol)
 	if err != nil {
 		t.Fatalf("NewClient returned error: %+v", err)
 	}
