@@ -2,6 +2,7 @@ package thrift
 
 import (
 	"fmt"
+	"io"
 	"reflect"
 	"sync"
 )
@@ -218,4 +219,73 @@ func encodeFields(t reflect.Type) map[int]encodeField {
 	}
 	encodeFieldsCache[t] = fs
 	return fs
+}
+
+func skipValue(r io.Reader, p Protocol, thriftType byte) error {
+	var err error
+	switch thriftType {
+	case typeBool:
+		_, err = p.ReadBool(r)
+	case typeByte:
+		_, err = p.ReadByte(r)
+	case typeI16:
+		_, err = p.ReadI16(r)
+	case typeI32:
+		_, err = p.ReadI32(r)
+	case typeI64:
+		_, err = p.ReadI64(r)
+	case typeDouble:
+		_, err = p.ReadDouble(r)
+	case typeString:
+		_, err = p.ReadBytes(r)
+	case typeStruct:
+		if err := p.ReadStructBegin(r); err != nil {
+			return err
+		}
+		for {
+			ftype, _, err := p.ReadFieldBegin(r)
+			if err != nil {
+				return err
+			}
+			if ftype == typeStop {
+				break
+			}
+			skipValue(r, p, ftype)
+			if err = p.ReadFieldEnd(r); err != nil {
+				return err
+			}
+		}
+		return p.ReadStructEnd(r)
+	case typeMap:
+		keyType, valueType, n, err := p.ReadMapBegin(r)
+		if err != nil {
+			return err
+		}
+
+		for i := 0; i < n; i++ {
+			skipValue(r, p, keyType)
+			skipValue(r, p, valueType)
+		}
+
+		return p.ReadMapEnd(r)
+	case typeList:
+		valueType, n, err := p.ReadListBegin(r)
+		if err != nil {
+			return err
+		}
+		for i := 0; i < n; i++ {
+			skipValue(r, p, valueType)
+		}
+		return p.ReadListEnd(r)
+	case typeSet:
+		valueType, n, err := p.ReadSetBegin(r)
+		if err != nil {
+			return err
+		}
+		for i := 0; i < n; i++ {
+			skipValue(r, p, valueType)
+		}
+		return p.ReadSetEnd(r)
+	}
+	return err
 }

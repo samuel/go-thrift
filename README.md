@@ -28,6 +28,7 @@ Example struct:
         Name      string   `thrift:"2"`
         PostCount int32    `thrift:"3,keepempty"`
         Flags     []string `thrift:"4"`
+        SomeSet   []string `thrift:"5,set"`
     }
 
 Types
@@ -44,3 +45,5 @@ quirks and limitations.
 * Unsigned types aren't supported. Thrift only has signed types. Could
   encode/decode unsigned types as their signed counterparts, but I
   decided against that for now.
+* []byte get encoded/decoded as a string because the Thrift binary type
+  is the same as string on the wire.

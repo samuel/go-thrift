@@ -35,8 +35,15 @@ func (c *serverCodec) ReadRequestHeader(request *rpc.Request) error {
 		return errors.New("Exception Call message type")
 	}
 
-	// iprot.skip(TType.STRUCT)
-	// iprot.readMessageEnd()
+	if err := skipValue(c.transport, c.protocol, typeStruct); err != nil {
+		return err
+	}
+
+	if err := c.protocol.ReadMessageEnd(c.transport); err != nil {
+		return err
+	}
+
+	// exc := &ApplicationException{}
 	// x = TApplicationException(TApplicationException.UNKNOWN_METHOD, 'Unknown function %s' % (name))
 	// oprot.writeMessageBegin(name, TMessageType.EXCEPTION, seqid)
 	// x.write(oprot)

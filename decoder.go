@@ -169,25 +169,17 @@ func (d *decoder) readValue(thriftType byte, rf reflect.Value) {
 		}
 	case typeList:
 		elemType := v.Type().Elem()
-		if elemType.Kind() == reflect.Uint8 && elemType.Name() == "byte" {
-			if bytes, err := d.p.ReadBytes(d.r); err != nil {
-				d.error(err)
-			} else {
-				v.SetBytes(bytes)
-			}
-		} else {
-			et, n, err := d.p.ReadListBegin(d.r)
-			if err != nil {
-				d.error(err)
-			}
-			for i := 0; i < n; i++ {
-				val := reflect.New(elemType)
-				d.readValue(et, val.Elem())
-				v.Set(reflect.Append(v, val.Elem()))
-			}
-			if err := d.p.ReadListEnd(d.r); err != nil {
-				d.error(err)
-			}
+		et, n, err := d.p.ReadListBegin(d.r)
+		if err != nil {
+			d.error(err)
+		}
+		for i := 0; i < n; i++ {
+			val := reflect.New(elemType)
+			d.readValue(et, val.Elem())
+			v.Set(reflect.Append(v, val.Elem()))
+		}
+		if err := d.p.ReadListEnd(d.r); err != nil {
+			d.error(err)
 		}
 	case typeSet:
 		elemType := v.Type().Elem()
