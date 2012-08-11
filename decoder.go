@@ -213,31 +213,3 @@ func (d *decoder) readValue(thriftType byte, rf reflect.Value) {
 
 	return
 }
-
-func (d *decoder) readSimpleValue(fieldType int) (val interface{}) {
-	var err error = nil
-	switch fieldType {
-	case typeBool:
-		val, err = d.p.ReadBool(d.r)
-	case typeByte:
-		val, err = d.p.ReadByte(d.r)
-	case typeI16:
-		val, err = d.p.ReadI16(d.r)
-	case typeI32:
-		val, err = d.p.ReadI32(d.r)
-	case typeI64:
-		val, err = d.p.ReadI64(d.r)
-	case typeDouble:
-		val, err = d.p.ReadDouble(d.r)
-	case typeString:
-		val, err = d.p.ReadString(d.r)
-	default:
-		d.error(&UnsupportedTypeError{})
-	}
-
-	if err != nil {
-		d.error(err)
-	}
-
-	return
-}
