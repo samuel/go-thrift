@@ -9,6 +9,10 @@ type ClosingBuffer struct {
 	Buffer *bytes.Buffer
 }
 
+func (c *ClosingBuffer) Len() int {
+	return c.Buffer.Len()
+}
+
 func (c *ClosingBuffer) Bytes() []byte {
 	return c.Buffer.Bytes()
 }
@@ -32,8 +36,20 @@ func TestFramed(t *testing.T) {
 	if _, err := framed.Write([]byte{1, 2, 3, 4}); err != nil {
 		t.Fatalf("Framed: error on Write %s", err)
 	}
+	if buf.Len() != 0 {
+		t.Fatalf("Framed: wrote %d bytes before flush", buf.Len())
+	}
 	if err := framed.Flush(); err != nil {
 		t.Fatalf("Framed: error on Flush %s", err)
+	}
+	if buf.Len() != 8 {
+		t.Fatalf("Framed: wrote (%d) other than 8 bytes after flush", buf.Len())
+	}
+	if err := framed.Flush(); err != nil {
+		t.Fatalf("Framed: error on Flush %s", err)
+	}
+	if buf.Len() != 8 {
+		t.Fatalf("Framed: flush didn't clear write buffer")
 	}
 
 	out := buf.Bytes()

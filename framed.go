@@ -80,9 +80,13 @@ func (f *FramedReadWriteCloser) Close() error {
 
 func (f *FramedReadWriteCloser) Flush() error {
 	frameSize := uint32(f.wbuf.Len())
-	if err := binary.Write(f.wrapped, binary.BigEndian, frameSize); err != nil {
+	if frameSize > 0 {
+		if err := binary.Write(f.wrapped, binary.BigEndian, frameSize); err != nil {
+			return err
+		}
+		_, err := io.Copy(f.wrapped, f.wbuf)
+		f.wbuf.Reset()
 		return err
 	}
-	_, err := io.Copy(f.wrapped, f.wbuf)
-	return err
+	return nil
 }
