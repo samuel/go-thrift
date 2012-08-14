@@ -223,3 +223,20 @@ func BenchmarkEncodeSimpleStruct(b *testing.B) {
 		EncodeStruct(buf, BinaryProtocol, st)
 	}
 }
+
+func BenchmarkDecodeSimpleStruct(b *testing.B) {
+	b.StopTimer()
+	buf1 := &bytes.Buffer{}
+	st := &struct {
+		Str string `thrift:"1,required"`
+		Int int32  `thrift:"2,required"`
+	}{
+		Str: "test",
+		Int: 123,
+	}
+	buf := bytes.NewBuffer(bytes.Repeat(buf1.Bytes(), b.N))
+	b.StartTimer()
+	for i := 0; i < b.N; i++ {
+		DecodeStruct(buf, BinaryProtocol, st)
+	}
+}
