@@ -41,21 +41,34 @@ type ScribeLogResponse struct {
 	Result ResultCode `thrift:"0,required"`
 }
 
-// type ScribeService interface {
-// 	Log(*ScribeLogRequest) (ResultCode, error)
-// }
+type ScribeService interface {
+	Log([]*LogEntry) (ResultCode, error)
+}
 
-type ScribeService int
+// rpc server wrapper
 
-func (s *ScribeService) Log(req *ScribeLogRequest, res *ScribeLogResponse) error {
-	fmt.Printf("REQ: %+v\n", req)
-	res.Result = resultCodeOk
-	return nil
+type ScribeServiceWrapper struct {
+	Implementation ScribeService
+}
+
+func (s *ScribeServiceWrapper) Log(req *ScribeLogRequest, res *ScribeLogResponse) error {
+	rc, err := s.Implementation.Log(req.Messages)
+	res.Result = rc
+	return err
+}
+
+// implementation
+
+type scribeServiceImplementation int
+
+func (s *scribeServiceImplementation) Log(messages []*LogEntry) (ResultCode, error) {
+	fmt.Printf("REQ: %+v\n", messages)
+	return resultCodeOk, nil
 }
 
 func main() {
-	scribeService := new(ScribeService)
-	rpc.RegisterName("Thrift", scribeService)
+	scribeService := new(scribeServiceImplementation)
+	rpc.RegisterName("Thrift", &ScribeServiceWrapper{scribeService})
 
 	ln, err := net.Listen("tcp", ":1463")
 	if err != nil {

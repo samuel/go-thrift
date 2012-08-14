@@ -29,6 +29,7 @@ func (c *serverCodec) ReadRequestHeader(request *rpc.Request) error {
 	if err != nil {
 		return err
 	}
+	name = camelCase(name)
 	if strings.ContainsRune(name, '.') {
 		request.ServiceMethod = name
 	} else {
