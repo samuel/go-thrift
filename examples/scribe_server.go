@@ -1,7 +1,9 @@
 package main
 
 import (
+	"fmt"
 	"net"
+	"net/rpc"
 	"github.com/samuel/go-thrift"
 )
 
@@ -27,6 +29,10 @@ type LogEntry struct {
 	Message  string `thrift:"2,required"`
 }
 
+func (e *LogEntry) String() string {
+	return fmt.Sprintf("%+v", *e)
+}
+
 type ScribeLogRequest struct {
 	Messages []*LogEntry `thrift:"1,required"`
 }
@@ -35,26 +41,33 @@ type ScribeLogResponse struct {
 	Result ResultCode `thrift:"0,required"`
 }
 
-type ScribeService interface {
-	Log(*ScribeLogRequest) (ResultCode, error)
-}
+// type ScribeService interface {
+// 	Log(*ScribeLogRequest) (ResultCode, error)
+// }
 
 type ScribeService int
 
 func (s *ScribeService) Log(req *ScribeLogRequest, res *ScribeLogResponse) error {
-	req := &ScribeLogRequest{messages}
-	res := &ScribeLogResponse{}
-	err := s.Client.Call("Log", req, res)
-	return res.Result, err
+	fmt.Printf("REQ: %+v\n", req)
+	res.Result = resultCodeOk
+	return nil
 }
 
 func main() {
 	scribeService := new(ScribeService)
-	rpc.Register(scribeService)
-	rpc.HandleHTTP()
-	l, e := net.Listen("tcp", ":1234")
-	if e != nil {
-		log.Fatal("listen error:", e)
+	rpc.RegisterName("Thrift", scribeService)
+
+	ln, err := net.Listen("tcp", ":1463")
+	if err != nil {
+		panic(err)
 	}
-	go http.Serve(l, nil)
+	for {
+		conn, err := ln.Accept()
+		if err != nil {
+			fmt.Printf("ERROR: %+v\n", err)
+			continue
+		}
+		fmt.Printf("New connection %+v\n", conn)
+		go rpc.ServeCodec(thrift.NewServerCodec(thrift.NewFramedReadWriteCloser(conn, 0), thrift.BinaryProtocol))
+	}
 }

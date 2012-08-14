@@ -55,10 +55,6 @@ func (d *decoder) readValue(thriftType byte, rf reflect.Value) {
 		kind = v.Kind()
 	}
 
-	// if thriftType != fieldType(v.Type()) {
-	// 	d.error(&UnsupportedValueError{Value: v, Str: "type mismatch"})
-	// }
-
 	var err error = nil
 	switch thriftType {
 	case typeBool:
@@ -136,8 +132,11 @@ func (d *decoder) readValue(thriftType byte, rf reflect.Value) {
 			if !ok {
 				SkipValue(d.r, d.p, ftype)
 			} else {
-				req &= ^(uint64(1) << byte(ef.i))
+				req &= ^(uint64(1) << uint64(id))
 				fieldValue := v.Field(ef.i)
+				if ftype != ef.fieldType {
+					d.error(&UnsupportedValueError{Value: fieldValue, Str: "type mismatch"})
+				}
 				d.readValue(ftype, fieldValue)
 			}
 

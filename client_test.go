@@ -2,7 +2,7 @@ package thrift
 
 import (
 	"fmt"
-	"net/rpc"
+	// "net/rpc"
 	"testing"
 )
 
@@ -40,32 +40,32 @@ type ScribeService interface {
 	Log(*ScribeLogRequest) (ResultCode, error)
 }
 
-type ScribeClient struct {
-	Client *rpc.Client
-}
+// type ScribeClient struct {
+// 	Client *rpc.Client
+// }
 
-func (s *ScribeClient) Log(messages []*LogEntry) (ResultCode, error) {
-	req := &ScribeLogRequest{messages}
-	res := &ScribeLogResponse{}
-	err := s.Client.Call("Log", req, res)
-	return res.Result, err
-}
+// func (s *ScribeClient) Log(messages []*LogEntry) (ResultCode, error) {
+// 	req := &ScribeLogRequest{messages}
+// 	res := &ScribeLogResponse{}
+// 	err := s.Client.Call("Log", req, res)
+// 	return res.Result, err
+// }
 
 func TestClient(t *testing.T) {
 	c, err := Dial("tcp", "localhost:1463", true, BinaryProtocol)
 	if err != nil {
 		t.Fatalf("NewClient returned error: %+v", err)
 	}
-	scribe := ScribeClient{c}
-	rc, err := scribe.Log([]*LogEntry{&LogEntry{"category", "message"}})
-	if err != nil {
-		t.Fatalf("scribe.Log returned error: %+v", err)
-	}
-	fmt.Printf("%+v\n", rc)
-	// req := &ScribeLogRequest{[]*LogEntry{&LogEntry{"category", "message"}}}
-	// res := &ScribeLogResponse{123}
-	// if err := c.Call("Log", req, res); err != nil {
-	// 	t.Fatalf("Client.Call returned error: %+v", err)
+	// scribe := ScribeClient{c}
+	// rc, err := scribe.Log([]*LogEntry{&LogEntry{"category", "message"}})
+	// if err != nil {
+	// 	t.Fatalf("scribe.Log returned error: %+v", err)
 	// }
-	// fmt.Printf("%+v\n", res)
+	// fmt.Printf("%+v\n", rc)
+	req := &ScribeLogRequest{[]*LogEntry{&LogEntry{"category", "message"}}}
+	res := &ScribeLogResponse{123}
+	if err := c.Call("Log", req, res); err != nil {
+		t.Fatalf("Client.Call returned error: %+v", err)
+	}
+	fmt.Printf("%+v\n", res)
 }

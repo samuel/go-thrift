@@ -4,6 +4,7 @@ import (
 	"errors"
 	"io"
 	"net/rpc"
+	"strings"
 )
 
 type serverCodec struct {
@@ -28,48 +29,45 @@ func (c *serverCodec) ReadRequestHeader(request *rpc.Request) error {
 	if err != nil {
 		return err
 	}
-	request.ServiceMethod = "Thrift." + name
+	if strings.ContainsRune(name, '.') {
+		request.ServiceMethod = name
+	} else {
+		request.ServiceMethod = "Thrift." + name
+	}
 	request.Seq = uint64(seq)
 
 	if messageType != messageTypeCall { // Currently don't support one way
 		return errors.New("Exception Call message type")
 	}
 
-	if err := SkipValue(c.transport, c.protocol, typeStruct); err != nil {
-		return err
-	}
-
-	if err := c.protocol.ReadMessageEnd(c.transport); err != nil {
-		return err
-	}
-
-	// exc := &ApplicationException{}
-	// x = TApplicationException(TApplicationException.UNKNOWN_METHOD, 'Unknown function %s' % (name))
-	// oprot.writeMessageBegin(name, TMessageType.EXCEPTION, seqid)
-	// x.write(oprot)
-	// oprot.writeMessageEnd()
-	// oprot.trans.flush()
-
 	return nil
 }
 
 func (c *serverCodec) ReadRequestBody(thriftStruct interface{}) error {
 	if thriftStruct == nil {
-		panic("TODO: Skip body in ReadRequestBody")
-	}
-
-	if err := DecodeStruct(c.transport, c.protocol, thriftStruct); err != nil {
-		return err
+		if err := SkipValue(c.transport, c.protocol, typeStruct); err != nil {
+			return err
+		}
+	} else {
+		if err := DecodeStruct(c.transport, c.protocol, thriftStruct); err != nil {
+			return err
+		}
 	}
 	return c.protocol.ReadMessageEnd(c.transport)
 }
 
 func (c *serverCodec) WriteResponse(response *rpc.Response, thriftStruct interface{}) error {
-	if err := c.protocol.WriteMessageBegin(c.transport, response.ServiceMethod, messageTypeReply, int32(response.Seq)); err != nil {
-		return err
-	}
+	mtype := byte(messageTypeReply)
 	if response.Error != "" {
-		thriftStruct = &ApplicationException{response.Error, ExceptionUnknown}
+		mtype = messageTypeException
+		etype := int32(ExceptionInternalError)
+		if strings.HasPrefix(response.Error, "rpc: can't find") {
+			etype = ExceptionUnknownMethod
+		}
+		thriftStruct = &ApplicationException{response.Error, etype}
+	}
+	if err := c.protocol.WriteMessageBegin(c.transport, response.ServiceMethod, mtype, int32(response.Seq)); err != nil {
+		return err
 	}
 	if err := EncodeStruct(c.transport, c.protocol, thriftStruct); err != nil {
 		return err
