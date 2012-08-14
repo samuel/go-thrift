@@ -44,11 +44,7 @@ func (e *encoder) writeStruct(v reflect.Value) {
 	if err := e.p.WriteStructBegin(e.w, v.Type().Name()); err != nil {
 		e.error(err)
 	}
-	for _, ef := range encodeFields(v.Type()) {
-		if ef.id == 0 {
-			continue
-		}
-
+	for _, ef := range encodeFields(v.Type()).fields {
 		structField := v.Type().Field(ef.i)
 		fieldValue := v.Field(ef.i)
 
@@ -62,12 +58,7 @@ func (e *encoder) writeStruct(v reflect.Value) {
 			}
 		}
 
-		var ftype byte
-		if ef.fieldType > 0 {
-			ftype = ef.fieldType
-		} else {
-			ftype = fieldType(fieldValue.Type())
-		}
+		ftype := ef.fieldType
 
 		if err := e.p.WriteFieldBegin(e.w, structField.Name, ftype, int16(ef.id)); err != nil {
 			e.error(err)

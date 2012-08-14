@@ -161,31 +161,38 @@ type encodeField struct {
 	required  bool
 	keepEmpty bool
 	fieldType byte
+	name      string
+}
+
+type structMeta struct {
+	required uint64 // bitmap of required fields
+	fields   map[int]encodeField
 }
 
 var (
 	typeCacheLock     sync.RWMutex
-	encodeFieldsCache = make(map[reflect.Type]map[int]encodeField)
+	encodeFieldsCache = make(map[reflect.Type]structMeta)
 )
 
 // encodeFields returns a slice of encodeField for a given
 // struct type.
-func encodeFields(t reflect.Type) map[int]encodeField {
+func encodeFields(t reflect.Type) structMeta {
 	typeCacheLock.RLock()
-	fs, ok := encodeFieldsCache[t]
+	m, ok := encodeFieldsCache[t]
 	typeCacheLock.RUnlock()
 	if ok {
-		return fs
+		return m
 	}
 
 	typeCacheLock.Lock()
 	defer typeCacheLock.Unlock()
-	fs, ok = encodeFieldsCache[t]
+	m, ok = encodeFieldsCache[t]
 	if ok {
-		return fs
+		return m
 	}
 
-	fs = make(map[int]encodeField)
+	fs := make(map[int]encodeField)
+	m = structMeta{fields: fs}
 	v := reflect.Zero(t)
 	n := v.NumField()
 	for i := 0; i < n; i++ {
@@ -198,27 +205,38 @@ func encodeFields(t reflect.Type) map[int]encodeField {
 			// so for now pretend they don't exist.
 			continue
 		}
-		var ef encodeField
-		ef.i = i
-		ef.id = 0
-
 		tv := f.Tag.Get("thrift")
 		if tv != "" {
+			var ef encodeField
+			ef.i = i
+			ef.id = 0
+
 			if tv == "-" {
 				continue
 			}
 			id, opts := parseTag(tv)
+			if id >= 64 {
+				// TODO: figure out a better way to deal with this
+				panic("thrift: field id must be < 64")
+			}
 			ef.id = id
+			ef.name = f.Name
 			ef.required = opts.Contains("required")
+			if ef.required {
+				m.required |= 1 << byte(id)
+			}
 			ef.keepEmpty = opts.Contains("keepempty")
 			if opts.Contains("set") {
 				ef.fieldType = typeSet
+			} else {
+				ef.fieldType = fieldType(f.Type)
 			}
+
+			fs[ef.id] = ef
 		}
-		fs[ef.id] = ef
 	}
-	encodeFieldsCache[t] = fs
-	return fs
+	encodeFieldsCache[t] = m
+	return m
 }
 
 func SkipValue(r io.Reader, p Protocol, thriftType byte) error {

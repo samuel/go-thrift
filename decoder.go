@@ -121,7 +121,8 @@ func (d *decoder) readValue(thriftType byte, rf reflect.Value) {
 			d.error(err)
 		}
 
-		fields := encodeFields(v.Type())
+		meta := encodeFields(v.Type())
+		req := meta.required
 		for {
 			ftype, id, err := d.p.ReadFieldBegin(d.r)
 			if err != nil {
@@ -131,12 +132,11 @@ func (d *decoder) readValue(thriftType byte, rf reflect.Value) {
 				break
 			}
 
-			ef, ok := fields[int(id)]
+			ef, ok := meta.fields[int(id)]
 			if !ok {
-				// Ignore unknown fields
-				// TODO
-				d.error(&UnsupportedValueError{Str: "TODO"})
+				SkipValue(d.r, d.p, ftype)
 			} else {
+				req &= ^(uint64(1) << byte(ef.i))
 				fieldValue := v.Field(ef.i)
 				d.readValue(ftype, fieldValue)
 			}
@@ -148,6 +148,17 @@ func (d *decoder) readValue(thriftType byte, rf reflect.Value) {
 
 		if err := d.p.ReadStructEnd(d.r); err != nil {
 			d.error(err)
+		}
+
+		if req != 0 {
+			for i := 0; req != 0; i, req = i+1, req>>1 {
+				if req&1 != 0 {
+					d.error(&MissingRequiredField{
+						StructName: v.Type().Name(),
+						FieldName:  meta.fields[i].name,
+					})
+				}
+			}
 		}
 	case typeMap:
 		keyType := v.Type().Key()

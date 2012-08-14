@@ -5,9 +5,15 @@ import (
 	"testing"
 )
 
+type nullWriter int
+
+func (n nullWriter) Write(b []byte) (int, error) {
+	return len(b), nil
+}
+
 func TestBinaryProtocol(t *testing.T) {
 	b := &bytes.Buffer{}
-	pr := DefaultBinaryProtocol
+	pr := BinaryProtocol
 
 	if err := pr.WriteBool(b, true); err != nil {
 		t.Fatalf("write bool true failed: %+v", err)
@@ -77,16 +83,37 @@ func TestBinaryProtocol(t *testing.T) {
 	}
 }
 
-// func BenchmarkReadByte(b *testing.B) {
-// 	// buf := bytes.NewBuffer(make([]byte, b.N*8))
-// 	// rd := BinaryProtocolReader{Reader: buf, Strict: false}
-// 	// for i := 0; i < b.N; i++ {
-// 	// 	pr.ReadI16()
-// 	// }
+func BenchmarkBinaryProtocolReadByte(b *testing.B) {
+	buf := bytes.NewBuffer(make([]byte, b.N))
+	for i := 0; i < b.N; i++ {
+		BinaryProtocol.ReadByte(buf)
+	}
+}
 
-// 	buf := &bytes.Buffer{}
-// 	pr := BinaryProtocol{Writer: buf, StrictWrite: true}
-// 	for i := 0; i < b.N; i++ {
-// 		pr.WriteI32(1)
-// 	}
-// }
+func BenchmarkBinaryProtocolReadI32(b *testing.B) {
+	buf := bytes.NewBuffer(make([]byte, b.N*4))
+	for i := 0; i < b.N; i++ {
+		BinaryProtocol.ReadI32(buf)
+	}
+}
+
+func BenchmarkBinaryProtocolWriteByte(b *testing.B) {
+	buf := nullWriter(0)
+	for i := 0; i < b.N; i++ {
+		BinaryProtocol.WriteByte(buf, 1)
+	}
+}
+
+func BenchmarkBinaryProtocolWriteI32(b *testing.B) {
+	buf := nullWriter(0)
+	for i := 0; i < b.N; i++ {
+		BinaryProtocol.WriteI32(buf, 1)
+	}
+}
+
+func BenchmarkBinaryProtocolWriteString4(b *testing.B) {
+	buf := nullWriter(0)
+	for i := 0; i < b.N; i++ {
+		BinaryProtocol.WriteString(buf, "test")
+	}
+}
