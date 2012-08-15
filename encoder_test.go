@@ -3,6 +3,7 @@ package thrift
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"reflect"
 	"testing"
 )
@@ -14,6 +15,37 @@ type TestStruct2 struct {
 
 func (t *TestStruct2) String() string {
 	return fmt.Sprintf("{Str:%s Binary:%+v}", t.Str, t.Binary)
+}
+
+type IntSet []int32
+
+func (s *IntSet) EncodeThrift(w io.Writer, p Protocol) error {
+	if err := p.WriteByte(w, byte(len(*s))); err != nil {
+		return err
+	}
+	for _, v := range *s {
+		if err := p.WriteI32(w, v); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *IntSet) DecodeThrift(r io.Reader, p Protocol) error {
+	l, err := p.ReadByte(r)
+	if err != nil {
+		return err
+	}
+	sl := (*s)[:0]
+	for i := byte(0); i < l; i++ {
+		v, err := p.ReadI32(r)
+		if err != nil {
+			return err
+		}
+		sl = append(sl, v*10)
+	}
+	*s = sl
+	return nil
 }
 
 type TestStruct struct {
@@ -36,6 +68,10 @@ type TestStructRequiredOptional struct {
 }
 
 type TestEmptyStruct struct{}
+
+type testCustomStruct struct {
+	Custom *IntSet `thrift:"1"`
+}
 
 func TestKeepEmpty(t *testing.T) {
 	buf := &bytes.Buffer{}
@@ -189,6 +225,31 @@ func TestDecodeUnknownFields(t *testing.T) {
 		t.Fatalf("Unknown fields during decode weren't ignored: %+v", err)
 	}
 }
+
+func TestDecodeCustom(t *testing.T) {
+	is := IntSet([]int32{1, 2, 3})
+	st := &testCustomStruct{
+		Custom: &is,
+	}
+
+	buf := &bytes.Buffer{}
+	err := EncodeStruct(buf, BinaryProtocol, st)
+	if err != nil {
+		t.Fatal("Failed to encode custom struct")
+	}
+
+	st2 := &testCustomStruct{}
+	err = DecodeStruct(buf, BinaryProtocol, st2)
+	if err != nil {
+		t.Fatalf("Custom fields during decode failed: %+v", err)
+	}
+	expected := IntSet([]int32{10, 20, 30})
+	if !reflect.DeepEqual(expected, *st2.Custom) {
+		t.Fatalf("Custom decode failed expected %+v instead %+v", expected, *st2.Custom)
+	}
+}
+
+// Benchmarks
 
 func BenchmarkEncodeEmptyStruct(b *testing.B) {
 	buf := nullWriter(0)

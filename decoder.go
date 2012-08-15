@@ -55,6 +55,13 @@ func (d *decoder) readValue(thriftType byte, rf reflect.Value) {
 		kind = v.Kind()
 	}
 
+	if de, ok := rf.Interface().(Decoder); ok {
+		if err := de.DecodeThrift(d.r, d.p); err != nil {
+			d.error(err)
+		}
+		return
+	}
+
 	var err error = nil
 	switch thriftType {
 	case typeBool:

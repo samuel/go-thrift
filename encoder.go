@@ -75,6 +75,13 @@ func (e *encoder) writeStruct(v reflect.Value) {
 }
 
 func (e *encoder) writeValue(v reflect.Value, thriftType byte) {
+	if en, ok := v.Interface().(Encoder); ok {
+		if err := en.EncodeThrift(e.w, e.p); err != nil {
+			e.error(err)
+		}
+		return
+	}
+
 	kind := v.Kind()
 	if kind == reflect.Ptr || kind == reflect.Interface {
 		v = v.Elem()
