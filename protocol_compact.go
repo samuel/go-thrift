@@ -15,14 +15,14 @@ const (
 	compactTypeShiftAmount = 5
 )
 
+// var CompactProtocol = NewCompactProtocol()
+
 type compactProtocol struct {
 }
 
-func (p *compactProtocol) writeByte(w io.Writer, value byte) (err error) {
-	b := []byte{value}
-	_, err = w.Write(b[:1])
-	return
-}
+// func NewCompactProtocol() Protocol {
+// 	return &compactProtocol{}
+// }
 
 func (p *compactProtocol) writeVarint(w io.Writer, value int64) (err error) {
 	b := make([]byte, compactBufferSize)
@@ -32,10 +32,10 @@ func (p *compactProtocol) writeVarint(w io.Writer, value int64) (err error) {
 }
 
 func (p *compactProtocol) WriteMessageBegin(w io.Writer, name string, messageType byte, seqid int32) (err error) {
-	if err = p.writeByte(w, compactProtocolId); err != nil {
+	if err = p.WriteByte(w, compactProtocolId); err != nil {
 		return
 	}
-	if err = p.writeByte(w, compactVersion|(messageType<<compactTypeShiftAmount)); err != nil {
+	if err = p.WriteByte(w, compactVersion|(messageType<<compactTypeShiftAmount)); err != nil {
 		return
 	}
 	if err = p.writeVarint(w, int64(seqid)); err != nil {
@@ -68,9 +68,9 @@ func (p *compactProtocol) WriteStructEnd(w io.Writer) error {
 // 	return nil
 // }
 
-// func (p *compactProtocol) WriteFieldStop() error {
-// 	return p.WriteByte(typeStop)
-// }
+func (p *compactProtocol) WriteFieldStop(w io.Writer) error {
+	return p.WriteByte(w, typeStop)
+}
 
 // func (p *compactProtocol) WriteMapBegin(keyType byte, valueType byte, size int) (err error) {
 // 	if err = p.WriteByte(keyType); err != nil {
@@ -115,11 +115,11 @@ func (p *compactProtocol) WriteStructEnd(w io.Writer) error {
 // 	return p.WriteByte(0)
 // }
 
-// func (p *compactProtocol) WriteByte(value byte) (err error) {
-// 	p.buf[0] = value
-// 	_, err = p.Writer.Write(p.buf[:1])
-// 	return
-// }
+func (p *compactProtocol) WriteByte(w io.Writer, value byte) (err error) {
+	b := []byte{value}
+	_, err = w.Write(b[:1])
+	return
+}
 
 // func (p *compactProtocol) WriteI16(value int16) (err error) {
 // 	b := p.buf[:2]

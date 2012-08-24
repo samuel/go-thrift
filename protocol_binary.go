@@ -12,7 +12,7 @@ var (
 	ErrNoProtocolVersionHeader = errors.New("No protocol version header")
 
 	// BinaryProtocol with strictWrite=true and strictRead=false
-	BinaryProtocol Protocol = &binaryProtocol{true, false}
+	BinaryProtocol = NewBinaryProtocol(true, false)
 )
 
 type binaryProtocol struct {
