@@ -109,7 +109,7 @@ func fieldType(t reflect.Type) byte {
 	switch t.Kind() {
 	case reflect.Bool:
 		return typeBool
-	case reflect.Int8:
+	case reflect.Int8, reflect.Uint8:
 		return typeByte
 	case reflect.Int16:
 		return typeI16

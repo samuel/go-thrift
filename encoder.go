@@ -93,7 +93,11 @@ func (e *encoder) writeValue(v reflect.Value, thriftType byte) {
 	case typeBool:
 		err = e.p.WriteBool(e.w, v.Bool())
 	case typeByte:
-		err = e.p.WriteByte(e.w, byte(v.Int()))
+		if kind == reflect.Uint8 {
+			err = e.p.WriteByte(e.w, byte(v.Uint()))
+		} else {
+			err = e.p.WriteByte(e.w, byte(v.Int()))
+		}
 	case typeI16:
 		err = e.p.WriteI16(e.w, int16(v.Int()))
 	case typeI32:

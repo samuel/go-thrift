@@ -74,7 +74,11 @@ func (d *decoder) readValue(thriftType byte, rf reflect.Value) {
 		if val, err := d.p.ReadByte(d.r); err != nil {
 			d.error(err)
 		} else {
-			v.SetInt(int64(val))
+			if kind == reflect.Uint8 {
+				v.SetUint(uint64(val))
+			} else {
+				v.SetInt(int64(val))
+			}
 		}
 	case typeI16:
 		if val, err := d.p.ReadI16(d.r); err != nil {
@@ -103,7 +107,8 @@ func (d *decoder) readValue(thriftType byte, rf reflect.Value) {
 	case typeString:
 		if kind == reflect.Slice {
 			elemType := v.Type().Elem()
-			if elemType.Kind() == reflect.Uint8 && elemType.Name() == "byte" {
+			elemTypeName := elemType.Name()
+			if elemType.Kind() == reflect.Uint8 && (elemTypeName == "byte" || elemTypeName == "uint8") {
 				if val, err := d.p.ReadBytes(d.r); err != nil {
 					d.error(err)
 				} else {
