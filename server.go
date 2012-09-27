@@ -46,7 +46,7 @@ func (c *serverCodec) ReadRequestHeader(request *rpc.Request) error {
 
 func (c *serverCodec) ReadRequestBody(thriftStruct interface{}) error {
 	if thriftStruct == nil {
-		if err := SkipValue(c.transport, c.protocol, typeStruct); err != nil {
+		if err := SkipValue(c.transport, c.protocol, TypeStruct); err != nil {
 			return err
 		}
 	} else {

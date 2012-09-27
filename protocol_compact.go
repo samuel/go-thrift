@@ -69,7 +69,7 @@ func (p *compactProtocol) WriteStructEnd(w io.Writer) error {
 // }
 
 func (p *compactProtocol) WriteFieldStop(w io.Writer) error {
-	return p.WriteByte(w, typeStop)
+	return p.WriteByte(w, TypeStop)
 }
 
 // func (p *compactProtocol) WriteMapBegin(keyType byte, valueType byte, size int) (err error) {
@@ -169,7 +169,7 @@ func (p *compactProtocol) WriteString(w io.Writer, value string) (err error) {
 // 			err = ErrBadVersion
 // 			return
 // 		}
-// 		messageType = byte(uint32(size) & typeMask)
+// 		messageType = byte(uint32(size) & TypeMask)
 // 		if name, err = p.ReadString(); err != nil {
 // 			return
 // 		}
@@ -204,7 +204,7 @@ func (p *compactProtocol) WriteString(w io.Writer, value string) (err error) {
 // }
 
 // func (p *compactProtocol) ReadFieldBegin() (fieldType byte, id int16, err error) {
-// 	if fieldType, err = p.ReadByte(); err != nil || fieldType == typeStop {
+// 	if fieldType, err = p.ReadByte(); err != nil || fieldType == TypeStop {
 // 		return
 // 	}
 // 	id, err = p.ReadI16()

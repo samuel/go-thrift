@@ -117,3 +117,43 @@ func BenchmarkBinaryProtocolWriteString4(b *testing.B) {
 		BinaryProtocol.WriteString(buf, "test")
 	}
 }
+
+func BenchmarkBinaryProtocolBufferedReadByte(b *testing.B) {
+	buf := bytes.NewBuffer(make([]byte, b.N))
+	p := NewBinaryProtocol(true, false, 256)
+	for i := 0; i < b.N; i++ {
+		p.ReadByte(buf)
+	}
+}
+
+func BenchmarkBinaryProtocolBufferedReadI32(b *testing.B) {
+	buf := bytes.NewBuffer(make([]byte, b.N*4))
+	p := NewBinaryProtocol(true, false, 256)
+	for i := 0; i < b.N; i++ {
+		p.ReadI32(buf)
+	}
+}
+
+func BenchmarkBinaryProtocolBufferedWriteByte(b *testing.B) {
+	buf := nullWriter(0)
+	p := NewBinaryProtocol(true, false, 256)
+	for i := 0; i < b.N; i++ {
+		p.WriteByte(buf, 1)
+	}
+}
+
+func BenchmarkBinaryProtocolBufferedWriteI32(b *testing.B) {
+	buf := nullWriter(0)
+	p := NewBinaryProtocol(true, false, 256)
+	for i := 0; i < b.N; i++ {
+		p.WriteI32(buf, 1)
+	}
+}
+
+func BenchmarkBinaryProtocolBufferedWriteString4(b *testing.B) {
+	buf := nullWriter(0)
+	p := NewBinaryProtocol(true, false, 256)
+	for i := 0; i < b.N; i++ {
+		p.WriteString(buf, "test")
+	}
+}

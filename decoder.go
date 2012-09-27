@@ -36,7 +36,7 @@ func DecodeStruct(r io.Reader, protocol Protocol, v interface{}) (err error) {
 	if vo.Elem().Kind() != reflect.Struct {
 		d.error(&UnsupportedValueError{Value: vo, Str: "expected a struct"})
 	}
-	d.readValue(typeStruct, vo.Elem())
+	d.readValue(TypeStruct, vo.Elem())
 	return nil
 }
 
@@ -64,13 +64,13 @@ func (d *decoder) readValue(thriftType byte, rf reflect.Value) {
 
 	var err error = nil
 	switch thriftType {
-	case typeBool:
+	case TypeBool:
 		if val, err := d.p.ReadBool(d.r); err != nil {
 			d.error(err)
 		} else {
 			v.SetBool(val)
 		}
-	case typeByte:
+	case TypeByte:
 		if val, err := d.p.ReadByte(d.r); err != nil {
 			d.error(err)
 		} else {
@@ -80,31 +80,31 @@ func (d *decoder) readValue(thriftType byte, rf reflect.Value) {
 				v.SetInt(int64(val))
 			}
 		}
-	case typeI16:
+	case TypeI16:
 		if val, err := d.p.ReadI16(d.r); err != nil {
 			d.error(err)
 		} else {
 			v.SetInt(int64(val))
 		}
-	case typeI32:
+	case TypeI32:
 		if val, err := d.p.ReadI32(d.r); err != nil {
 			d.error(err)
 		} else {
 			v.SetInt(int64(val))
 		}
-	case typeI64:
+	case TypeI64:
 		if val, err := d.p.ReadI64(d.r); err != nil {
 			d.error(err)
 		} else {
 			v.SetInt(val)
 		}
-	case typeDouble:
+	case TypeDouble:
 		if val, err := d.p.ReadDouble(d.r); err != nil {
 			d.error(err)
 		} else {
 			v.SetFloat(val)
 		}
-	case typeString:
+	case TypeString:
 		if kind == reflect.Slice {
 			elemType := v.Type().Elem()
 			elemTypeName := elemType.Name()
@@ -124,7 +124,7 @@ func (d *decoder) readValue(thriftType byte, rf reflect.Value) {
 				v.SetString(val)
 			}
 		}
-	case typeStruct:
+	case TypeStruct:
 		if err := d.p.ReadStructBegin(d.r); err != nil {
 			d.error(err)
 		}
@@ -136,7 +136,7 @@ func (d *decoder) readValue(thriftType byte, rf reflect.Value) {
 			if err != nil {
 				d.error(err)
 			}
-			if ftype == typeStop {
+			if ftype == TypeStop {
 				break
 			}
 
@@ -171,7 +171,7 @@ func (d *decoder) readValue(thriftType byte, rf reflect.Value) {
 				}
 			}
 		}
-	case typeMap:
+	case TypeMap:
 		keyType := v.Type().Key()
 		valueType := v.Type().Elem()
 		ktype, vtype, n, err := d.p.ReadMapBegin(d.r)
@@ -189,7 +189,7 @@ func (d *decoder) readValue(thriftType byte, rf reflect.Value) {
 		if err := d.p.ReadMapEnd(d.r); err != nil {
 			d.error(err)
 		}
-	case typeList:
+	case TypeList:
 		elemType := v.Type().Elem()
 		et, n, err := d.p.ReadListBegin(d.r)
 		if err != nil {
@@ -203,7 +203,7 @@ func (d *decoder) readValue(thriftType byte, rf reflect.Value) {
 		if err := d.p.ReadListEnd(d.r); err != nil {
 			d.error(err)
 		}
-	case typeSet:
+	case TypeSet:
 		elemType := v.Type().Elem()
 		et, n, err := d.p.ReadSetBegin(d.r)
 		if err != nil {

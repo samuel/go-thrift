@@ -90,23 +90,23 @@ func (e *encoder) writeValue(v reflect.Value, thriftType byte) {
 
 	var err error = nil
 	switch thriftType {
-	case typeBool:
+	case TypeBool:
 		err = e.p.WriteBool(e.w, v.Bool())
-	case typeByte:
+	case TypeByte:
 		if kind == reflect.Uint8 {
 			err = e.p.WriteByte(e.w, byte(v.Uint()))
 		} else {
 			err = e.p.WriteByte(e.w, byte(v.Int()))
 		}
-	case typeI16:
+	case TypeI16:
 		err = e.p.WriteI16(e.w, int16(v.Int()))
-	case typeI32:
+	case TypeI32:
 		err = e.p.WriteI32(e.w, int32(v.Int()))
-	case typeI64:
+	case TypeI64:
 		err = e.p.WriteI64(e.w, int64(v.Int()))
-	case typeDouble:
+	case TypeDouble:
 		err = e.p.WriteDouble(e.w, v.Float())
-	case typeString:
+	case TypeString:
 		if kind == reflect.Slice {
 			elemType := v.Type().Elem()
 			if elemType.Kind() == reflect.Uint8 && elemType.Name() == "byte" {
@@ -117,9 +117,9 @@ func (e *encoder) writeValue(v reflect.Value, thriftType byte) {
 		} else {
 			err = e.p.WriteString(e.w, v.String())
 		}
-	case typeStruct:
+	case TypeStruct:
 		e.writeStruct(v)
-	case typeMap:
+	case TypeMap:
 		keyType := v.Type().Key()
 		valueType := v.Type().Elem()
 		keyThriftType := fieldType(keyType)
@@ -132,7 +132,7 @@ func (e *encoder) writeValue(v reflect.Value, thriftType byte) {
 			e.writeValue(v.MapIndex(k), fieldType(valueType))
 		}
 		err = e.p.WriteMapEnd(e.w)
-	case typeList:
+	case TypeList:
 		elemType := v.Type().Elem()
 		if elemType.Kind() == reflect.Uint8 && elemType.Name() == "byte" {
 			err = e.p.WriteBytes(e.w, v.Bytes())
@@ -147,7 +147,7 @@ func (e *encoder) writeValue(v reflect.Value, thriftType byte) {
 			}
 			err = e.p.WriteListEnd(e.w)
 		}
-	case typeSet:
+	case TypeSet:
 		elemType := v.Type().Elem()
 		elemThriftType := fieldType(elemType)
 		if er := e.p.WriteSetBegin(e.w, elemThriftType, v.Len()); er != nil {

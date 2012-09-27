@@ -9,23 +9,23 @@ import (
 )
 
 const (
-	typeStop   = 0
-	typeVoid   = 1
-	typeBool   = 2
-	typeByte   = 3
-	typeI08    = 3
-	typeDouble = 4
-	typeI16    = 6
-	typeI32    = 8
-	typeI64    = 10
-	typeString = 11
-	typeUtf7   = 11
-	typeStruct = 12
-	typeMap    = 13
-	typeSet    = 14
-	typeList   = 15
-	typeUtf8   = 16
-	typeUtf16  = 17
+	TypeStop   = 0
+	TypeVoid   = 1
+	TypeBool   = 2
+	TypeByte   = 3
+	TypeI08    = 3
+	TypeDouble = 4
+	TypeI16    = 6
+	TypeI32    = 8
+	TypeI64    = 10
+	TypeString = 11
+	TypeUtf7   = 11
+	TypeStruct = 12
+	TypeMap    = 13
+	TypeSet    = 14
+	TypeList   = 15
+	TypeUtf8   = 16
+	TypeUtf16  = 17
 )
 
 const (
@@ -44,12 +44,6 @@ const (
 	ExceptionMissingResult      = 5
 	ExceptionInternalError      = 6
 	ExceptionProtocolError      = 7
-)
-
-var (
-	versionMask uint32 = 0xffff0000
-	version1    uint32 = 0x80010000
-	typeMask    uint32 = 0x000000ff
 )
 
 type MissingRequiredField struct {
@@ -108,28 +102,28 @@ func (e *ApplicationException) String() string {
 func fieldType(t reflect.Type) byte {
 	switch t.Kind() {
 	case reflect.Bool:
-		return typeBool
+		return TypeBool
 	case reflect.Int8, reflect.Uint8:
-		return typeByte
+		return TypeByte
 	case reflect.Int16:
-		return typeI16
+		return TypeI16
 	case reflect.Int32, reflect.Int:
-		return typeI32
+		return TypeI32
 	case reflect.Int64:
-		return typeI64
+		return TypeI64
 	case reflect.Map:
-		return typeMap
+		return TypeMap
 	case reflect.Slice:
 		elemType := t.Elem()
 		if elemType.Kind() == reflect.Uint8 && elemType.Name() == "byte" {
-			return typeString
+			return TypeString
 		} else {
-			return typeList
+			return TypeList
 		}
 	case reflect.Struct:
-		return typeStruct
+		return TypeStruct
 	case reflect.String:
-		return typeString
+		return TypeString
 	case reflect.Interface, reflect.Ptr:
 		return fieldType(t.Elem())
 	}
@@ -228,7 +222,7 @@ func encodeFields(t reflect.Type) structMeta {
 			}
 			ef.keepEmpty = opts.Contains("keepempty")
 			if opts.Contains("set") {
-				ef.fieldType = typeSet
+				ef.fieldType = TypeSet
 			} else {
 				ef.fieldType = fieldType(f.Type)
 			}
@@ -243,21 +237,21 @@ func encodeFields(t reflect.Type) structMeta {
 func SkipValue(r io.Reader, p Protocol, thriftType byte) error {
 	var err error
 	switch thriftType {
-	case typeBool:
+	case TypeBool:
 		_, err = p.ReadBool(r)
-	case typeByte:
+	case TypeByte:
 		_, err = p.ReadByte(r)
-	case typeI16:
+	case TypeI16:
 		_, err = p.ReadI16(r)
-	case typeI32:
+	case TypeI32:
 		_, err = p.ReadI32(r)
-	case typeI64:
+	case TypeI64:
 		_, err = p.ReadI64(r)
-	case typeDouble:
+	case TypeDouble:
 		_, err = p.ReadDouble(r)
-	case typeString:
+	case TypeString:
 		_, err = p.ReadBytes(r)
-	case typeStruct:
+	case TypeStruct:
 		if err := p.ReadStructBegin(r); err != nil {
 			return err
 		}
@@ -266,7 +260,7 @@ func SkipValue(r io.Reader, p Protocol, thriftType byte) error {
 			if err != nil {
 				return err
 			}
-			if ftype == typeStop {
+			if ftype == TypeStop {
 				break
 			}
 			if err = SkipValue(r, p, ftype); err != nil {
@@ -277,7 +271,7 @@ func SkipValue(r io.Reader, p Protocol, thriftType byte) error {
 			}
 		}
 		return p.ReadStructEnd(r)
-	case typeMap:
+	case TypeMap:
 		keyType, valueType, n, err := p.ReadMapBegin(r)
 		if err != nil {
 			return err
@@ -293,7 +287,7 @@ func SkipValue(r io.Reader, p Protocol, thriftType byte) error {
 		}
 
 		return p.ReadMapEnd(r)
-	case typeList:
+	case TypeList:
 		valueType, n, err := p.ReadListBegin(r)
 		if err != nil {
 			return err
@@ -304,7 +298,7 @@ func SkipValue(r io.Reader, p Protocol, thriftType byte) error {
 			}
 		}
 		return p.ReadListEnd(r)
-	case typeSet:
+	case TypeSet:
 		valueType, n, err := p.ReadSetBegin(r)
 		if err != nil {
 			return err
@@ -321,21 +315,21 @@ func SkipValue(r io.Reader, p Protocol, thriftType byte) error {
 
 func ReadValue(r io.Reader, p Protocol, thriftType byte) (interface{}, error) {
 	switch thriftType {
-	case typeBool:
+	case TypeBool:
 		return p.ReadBool(r)
-	case typeByte:
+	case TypeByte:
 		return p.ReadByte(r)
-	case typeI16:
+	case TypeI16:
 		return p.ReadI16(r)
-	case typeI32:
+	case TypeI32:
 		return p.ReadI32(r)
-	case typeI64:
+	case TypeI64:
 		return p.ReadI64(r)
-	case typeDouble:
+	case TypeDouble:
 		return p.ReadDouble(r)
-	case typeString:
+	case TypeString:
 		return p.ReadString(r)
-	case typeStruct:
+	case TypeStruct:
 		if err := p.ReadStructBegin(r); err != nil {
 			return nil, err
 		}
@@ -345,7 +339,7 @@ func ReadValue(r io.Reader, p Protocol, thriftType byte) (interface{}, error) {
 			if err != nil {
 				return st, err
 			}
-			if ftype == typeStop {
+			if ftype == TypeStop {
 				break
 			}
 			v, err := ReadValue(r, p, ftype)
@@ -358,7 +352,7 @@ func ReadValue(r io.Reader, p Protocol, thriftType byte) (interface{}, error) {
 			}
 		}
 		return st, p.ReadStructEnd(r)
-	case typeMap:
+	case TypeMap:
 		keyType, valueType, n, err := p.ReadMapBegin(r)
 		if err != nil {
 			return nil, err
@@ -378,7 +372,7 @@ func ReadValue(r io.Reader, p Protocol, thriftType byte) (interface{}, error) {
 		}
 
 		return mp, p.ReadMapEnd(r)
-	case typeList:
+	case TypeList:
 		valueType, n, err := p.ReadListBegin(r)
 		if err != nil {
 			return nil, err
@@ -392,7 +386,7 @@ func ReadValue(r io.Reader, p Protocol, thriftType byte) (interface{}, error) {
 			lst = append(lst, v)
 		}
 		return lst, p.ReadListEnd(r)
-	case typeSet:
+	case TypeSet:
 		valueType, n, err := p.ReadSetBegin(r)
 		if err != nil {
 			return nil, err
