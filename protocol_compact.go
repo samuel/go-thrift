@@ -2,6 +2,8 @@ package thrift
 
 import (
 	"encoding/binary"
+	"errors"
+	"fmt"
 	"io"
 	// "math"
 )
@@ -15,14 +17,84 @@ const (
 	compactTypeShiftAmount = 5
 )
 
-// var CompactProtocol = NewCompactProtocol()
+const (
+	csClear = iota
+	csFieldWrite
+	csValueWrite
+	csContainerWrite
+	csBoolWrite
+	csFieldRead
+	csContainerRead
+	csValueRead
+	csBoolRead
+)
 
-type compactProtocol struct {
+const (
+	ctStop = iota
+	ctTrue
+	ctFalse
+	ctByte
+	ctI16
+	ctI32
+	ctI64
+	ctDouble
+	ctBinary
+	ctList
+	ctSet
+	ctMap
+	ctStruct
+)
+
+var (
+	ctypes = map[byte]int16{
+		TypeStop:   ctStop,
+		TypeBool:   ctTrue,
+		TypeByte:   ctByte,
+		TypeI16:    ctI16,
+		TypeI32:    ctI32,
+		TypeI64:    ctI64,
+		TypeDouble: ctDouble,
+		TypeString: ctBinary,
+		TypeStruct: ctStruct,
+		TypeList:   ctList,
+		TypeSet:    ctSet,
+		TypeMap:    ctMap,
+	}
+)
+
+type InvalidStateError struct {
+	CurrentState  int
+	ExpectedState int
 }
 
-// func NewCompactProtocol() Protocol {
-// 	return &compactProtocol{}
-// }
+func (e InvalidStateError) Error() string {
+	return fmt.Sprintf("InvalidStateError current=%d expected=%d",
+		e.CurrentState, e.ExpectedState)
+}
+
+type structState struct {
+	state   int
+	lastFid int16
+}
+
+type compactProtocol struct {
+	state     int
+	lastFid   int16
+	boolFid   int16
+	boolValue int
+	structs   []structState
+}
+
+func NewCompactProtocol() Protocol {
+	return &compactProtocol{
+		state:     csClear,
+		lastFid:   0,
+		boolFid:   -1,
+		boolValue: -1,
+		structs:   make([]structState, 0, 8),
+		// self.__containers = []
+	}
+}
 
 func (p *compactProtocol) writeVarint(w io.Writer, value int64) (err error) {
 	b := make([]byte, compactBufferSize)
@@ -32,6 +104,10 @@ func (p *compactProtocol) writeVarint(w io.Writer, value int64) (err error) {
 }
 
 func (p *compactProtocol) WriteMessageBegin(w io.Writer, name string, messageType byte, seqid int32) (err error) {
+	if p.state != csClear {
+		return InvalidStateError{p.state, csClear}
+	}
+
 	if err = p.WriteByte(w, compactProtocolId); err != nil {
 		return
 	}
@@ -42,35 +118,127 @@ func (p *compactProtocol) WriteMessageBegin(w io.Writer, name string, messageTyp
 		return
 	}
 	err = p.WriteString(w, name)
+
+	p.state = csValueWrite
 	return
 }
 
 func (p *compactProtocol) WriteMessageEnd(w io.Writer) error {
+	if p.state != csValueWrite {
+		return InvalidStateError{p.state, csValueWrite}
+	}
+	p.state = csClear
 	return nil
 }
 
 func (p *compactProtocol) WriteStructBegin(w io.Writer, name string) error {
+	switch p.state {
+	case csClear:
+	case csContainerWrite:
+	case csValueWrite:
+	default:
+		return InvalidStateError{p.state, csClear}
+	}
+	p.structs = append(p.structs, structState{p.state, p.lastFid})
+	p.state = csFieldWrite
+	p.lastFid = 0
 	return nil
 }
 
 func (p *compactProtocol) WriteStructEnd(w io.Writer) error {
+	if p.state != csFieldWrite {
+		return InvalidStateError{p.state, csFieldWrite}
+	}
+	if len(p.structs) == 0 {
+		return errors.New("Struct end without matching begin")
+	}
+	st := p.structs[len(p.structs)-1]
+	p.structs = p.structs[:len(p.structs)-1]
+	p.state, p.lastFid = st.state, p.lastFid
 	return nil
 }
 
-// func (p *compactProtocol) WriteFieldBegin(name string, fieldType byte, id int16) (err error) {
-// 	if err = p.WriteByte(fieldType); err != nil {
-// 		return
-// 	}
-// 	return p.WriteI16(id)
-// }
+func (p *compactProtocol) writeFieldHeader(compactType int16, fid int16) error {
+	delta := fid - p.lastFid
+	if delta > 0 && delta <= 15 {
+		p.writeUByte(delta<<4 | compactType)
+	} else {
+		p.WriteByte(compactType)
+		p.WriteI16(fid)
+	}
+	p.lastFid = fid
+}
 
-// func (p *compactProtocol) WriteFieldEnd() error {
-// 	return nil
-// }
+func (p *compactProtocol) WriteFieldBegin(name string, fieldType byte, id int16) (err error) {
+	if p.state != csFieldWrite {
+		return InvalidStateError{p.state, csFieldWrite}
+	}
+
+	if fieldType == TypeBool {
+		p.state = csBoolWrite
+		p.boolFid = id
+	} else {
+		p.state = csValueWrite
+		p.writeFieldHeader(ctypes[fieldType], id)
+	}
+
+	return nil
+}
+
+func (p *compactProtocol) WriteFieldEnd() error {
+	if p.state != csValueWrite && p.state != csBoolWrite {
+		return InvalidStateError{p.state, csValueWrite}
+	}
+	p.state = csFieldWrite
+	return nil
+}
 
 func (p *compactProtocol) WriteFieldStop(w io.Writer) error {
 	return p.WriteByte(w, TypeStop)
 }
+
+func (p *compactProtocol) writeCollectionBegin(w io.Writer, etype int, size int) error {
+	if p.state != csValueWrite && p.state != csContainerWrite {
+		return InvalidStateError{p.state, csValueWrite}
+	}
+
+	if size <= 14 {
+		p.writeUByte(size<<4 | ctypes[etype])
+	} else {
+		p.writeUByte(0xf0 | ctypes[etype])
+		p.writeSize(size)
+	}
+}
+
+func (p *compactProtocol) writeMapBegin(w io.Writer, ktype int, vtype int, size int) error {
+	if p.state != csValueWrite && p.state != csContainerWrite {
+		return InvalidStateError{p.state, csValueWrite}
+	}
+
+	if size == 0 {
+		p.writeByte(0)
+	} else {
+		p.writeSize(size)
+		p.writeUByte(ctypes[ktype]<<4 | ctypes[vtype])
+	}
+	p.containers = append(p.containers, state)
+	p.state = csContainerWrite
+}
+
+// func (p *compactProtocol) writeCollectionEnd(w io.Writer, )
+
+// def writeCollectionEnd(self):
+//   assert self.state == CONTAINER_WRITE, self.state
+//   self.state = self.__containers.pop()
+// writeMapEnd = writeCollectionEnd
+// writeSetEnd = writeCollectionEnd
+// writeListEnd = writeCollectionEnd
+
+// def __writeI16(self, i16):
+//   self.__writeVarint(makeZigZag(i16, 16))
+
+// def __writeSize(self, i32):
+//   self.__writeVarint(i32)
 
 // func (p *compactProtocol) WriteMapBegin(keyType byte, valueType byte, size int) (err error) {
 // 	if err = p.WriteByte(keyType); err != nil {

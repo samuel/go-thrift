@@ -11,9 +11,8 @@ func (n nullWriter) Write(b []byte) (int, error) {
 	return len(b), nil
 }
 
-func TestBinaryProtocol(t *testing.T) {
+func testProtocol(t *testing.T, pr Protocol) {
 	b := &bytes.Buffer{}
-	pr := BinaryProtocol
 
 	if err := pr.WriteBool(b, true); err != nil {
 		t.Fatalf("write bool true failed: %+v", err)
@@ -81,6 +80,10 @@ func TestBinaryProtocol(t *testing.T) {
 		}
 		testString += "012345"
 	}
+}
+
+func TestBinaryProtocol(t *testing.T) {
+	testProtocol(t, BinaryProtocol)
 }
 
 func BenchmarkBinaryProtocolReadByte(b *testing.B) {
