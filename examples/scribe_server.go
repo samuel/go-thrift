@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"net/rpc"
+
 	"github.com/samuel/go-thrift"
 )
 
@@ -62,7 +63,7 @@ func (s *ScribeServiceWrapper) Log(req *ScribeLogRequest, res *ScribeLogResponse
 type scribeServiceImplementation int
 
 func (s *scribeServiceImplementation) Log(messages []*LogEntry) (ResultCode, error) {
-	fmt.Printf("REQ: %+v\n", messages)
+	// fmt.Printf("REQ: %+v\n", messages)
 	return resultCodeOk, nil
 }
 

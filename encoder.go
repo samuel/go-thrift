@@ -16,6 +16,10 @@ type encoder struct {
 }
 
 func EncodeStruct(w io.Writer, protocol Protocol, v interface{}) (err error) {
+	if en, ok := v.(Encoder); ok {
+		return en.EncodeThrift(w, protocol)
+	}
+
 	defer func() {
 		if r := recover(); r != nil {
 			if _, ok := r.(runtime.Error); ok {
