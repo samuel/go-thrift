@@ -110,6 +110,16 @@ func testProtocol(t *testing.T, pr Protocol) {
 		t.Fatalf("WriteFieldEnd failed: %+v", err)
 	}
 
+	if err := pr.WriteFieldBegin(b, "str", TypeString, 3); err != nil {
+		t.Fatalf("WriteFieldBegin failed: %+v", err)
+	}
+	if err := pr.WriteString(b, "foo"); err != nil {
+		t.Fatalf("WriteString failed: %+v", err)
+	}
+	if err := pr.WriteFieldEnd(b); err != nil {
+		t.Fatalf("WriteFieldEnd failed: %+v", err)
+	}
+
 	if err := pr.WriteFieldStop(b); err != nil {
 		t.Fatalf("WriteStructEnd failed: %+v", err)
 	}
@@ -162,6 +172,22 @@ func testProtocol(t *testing.T, pr Protocol) {
 		t.Fatalf("ReaBool failed: %+v", err)
 	} else if v {
 		t.Fatalf("ReadBool value mistmatch %+v != %+v", v, false)
+	}
+	if err := pr.ReadFieldEnd(b); err != nil {
+		t.Fatalf("ReadFieldEnd failed: %+v", err)
+	}
+
+	if fieldType, id, err := pr.ReadFieldBegin(b); err != nil {
+		t.Fatalf("ReadFieldBegin failed: %+v", err)
+	} else if fieldType != TypeString {
+		t.Fatalf("ReadFieldBegin type mismatch: %d != %d", fieldType, TypeString)
+	} else if id != 3 {
+		t.Fatalf("ReadFieldBegin id mismatch: %d != %d", id, 2)
+	}
+	if v, err := pr.ReadString(b); err != nil {
+		t.Fatalf("ReadString failed: %+v", err)
+	} else if v != "foo" {
+		t.Fatalf("ReadString value mistmatch %s != %s", v, "foo")
 	}
 	if err := pr.ReadFieldEnd(b); err != nil {
 		t.Fatalf("ReadFieldEnd failed: %+v", err)

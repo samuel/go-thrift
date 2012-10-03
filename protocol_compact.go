@@ -92,6 +92,12 @@ func (p *compactProtocol) writeVarint(w io.Writer, value int64) (err error) {
 	return
 }
 
+func (p *compactProtocol) writeUvarint(w io.Writer, value uint64) (err error) {
+	n := binary.PutUvarint(p.writeBuf, value)
+	_, err = w.Write(p.writeBuf[:n])
+	return
+}
+
 func (p *compactProtocol) readVarint(r io.Reader) (int64, error) {
 	if br, ok := r.(io.ByteReader); ok {
 		return binary.ReadVarint(br)
@@ -115,6 +121,29 @@ func (p *compactProtocol) readVarint(r io.Reader) (int64, error) {
 	panic("Shouldn't be reached")
 }
 
+func (p *compactProtocol) readUvarint(r io.Reader) (uint64, error) {
+	if br, ok := r.(io.ByteReader); ok {
+		return binary.ReadUvarint(br)
+	}
+	// TODO: Make this more efficient
+	n := 0
+	b := p.readBuf
+	for {
+		if _, err := r.Read(b[n : n+1]); err != nil {
+			return 0, err
+		}
+		n++
+		// n == 0: buf too small
+		// n  < 0: value larger than 64-bits
+		if val, n := binary.Uvarint(b[:n]); n > 0 {
+			return val, nil
+		} else if n < 0 {
+			return val, errors.New("thrift: varint overflow on read")
+		}
+	}
+	panic("Shouldn't be reached")
+}
+
 // Write a message header to the wire. Compact Protocol messages contain the
 // protocol version so we can migrate forwards in the future if need be.
 func (p *compactProtocol) WriteMessageBegin(w io.Writer, name string, messageType byte, seqid int32) (err error) {
@@ -124,7 +153,7 @@ func (p *compactProtocol) WriteMessageBegin(w io.Writer, name string, messageTyp
 	if err = p.writeByteDirect(w, compactVersion|(messageType<<compactTypeShiftAmount)); err != nil {
 		return
 	}
-	if err = p.writeVarint(w, int64(seqid)); err != nil {
+	if err = p.writeUvarint(w, uint64(seqid)); err != nil {
 		return
 	}
 	err = p.WriteString(w, name)
@@ -207,7 +236,7 @@ func (p *compactProtocol) WriteMapBegin(w io.Writer, keyType byte, valueType byt
 	if size == 0 {
 		return p.writeByteDirect(w, 0)
 	}
-	if err := p.writeVarint(w, int64(size)); err != nil {
+	if err := p.writeUvarint(w, uint64(size)); err != nil {
 		return err
 	}
 	return p.writeByteDirect(w, byte(thriftTypeToCompactType[keyType]<<4|thriftTypeToCompactType[valueType]))
@@ -269,7 +298,7 @@ func (p *compactProtocol) WriteString(w io.Writer, value string) error {
 
 // Write a byte array, using a varint for the size.
 func (p *compactProtocol) WriteBytes(w io.Writer, value []byte) error {
-	if err := p.writeVarint(w, int64(len(value))); err != nil {
+	if err := p.writeUvarint(w, uint64(len(value))); err != nil {
 		return err
 	}
 	_, err := w.Write(value)
@@ -296,7 +325,7 @@ func (p *compactProtocol) WriteFieldEnd(w io.Writer) error {
 	return nil
 }
 
-// Abstract method for writing the start of lists and sets. List and sets on 
+// Abstract method for writing the start of lists and sets. List and sets on
 // the wire differ only by the type indicator.
 func (p *compactProtocol) writeCollectionBegin(w io.Writer, elemType byte, size int) error {
 	if size <= 14 {
@@ -305,7 +334,7 @@ func (p *compactProtocol) writeCollectionBegin(w io.Writer, elemType byte, size 
 	if err := p.writeByteDirect(w, 0xf0|thriftTypeToCompactType[elemType]); err != nil {
 		return err
 	}
-	return p.writeVarint(w, int64(size))
+	return p.writeUvarint(w, uint64(size))
 }
 
 // Writes a byte without any possiblity of all that field header nonsense.
@@ -333,7 +362,7 @@ func (p *compactProtocol) ReadMessageBegin(r io.Reader) (string, byte, int32, er
 		return "", 0, -1, errors.New("thrift: invalid compact protocol version")
 	}
 	msgType := (versionAndType >> compactTypeShiftAmount) & 0x03
-	seqId, err := p.readVarint(r)
+	seqId, err := p.readUvarint(r)
 	if err != nil {
 		return "", 0, -1, err
 	}
@@ -405,7 +434,7 @@ func (p *compactProtocol) ReadFieldBegin(r io.Reader) (byte, int16, error) {
 // and value type. This means that 0-length maps will yield TMaps without the
 // "correct" types.
 func (p *compactProtocol) ReadMapBegin(r io.Reader) (byte, byte, int, error) {
-	size, err := p.readVarint(r)
+	size, err := p.readUvarint(r)
 	if err != nil {
 		return 0, 0, -1, err
 	}
@@ -430,7 +459,7 @@ func (p *compactProtocol) ReadListBegin(r io.Reader) (byte, int, error) {
 	}
 	size := int((sizeAndType >> 4) & 0x0f)
 	if size == 15 {
-		s, err := p.readVarint(r)
+		s, err := p.readUvarint(r)
 		if err != nil {
 			return 0, -1, err
 		}
@@ -491,9 +520,11 @@ func (p *compactProtocol) ReadDouble(r io.Reader) (float64, error) {
 }
 
 func (p *compactProtocol) ReadString(r io.Reader) (string, error) {
-	ln, err := p.readVarint(r)
+	ln, err := p.readUvarint(r)
 	if err != nil || ln == 0 {
 		return "", err
+	} else if ln < 0 {
+		return "", errors.New("thrift: negative length in CompactProtocol.ReadString")
 	}
 	b := p.readBuf
 	if int(ln) > len(b) {
@@ -508,9 +539,11 @@ func (p *compactProtocol) ReadString(r io.Reader) (string, error) {
 }
 
 func (p *compactProtocol) ReadBytes(r io.Reader) ([]byte, error) {
-	ln, err := p.readVarint(r)
+	ln, err := p.readUvarint(r)
 	if err != nil || ln == 0 {
 		return nil, err
+	} else if ln < 0 {
+		return nil, errors.New("thrift: negative length in CompactProtocol.ReadBytes")
 	}
 	b := make([]byte, ln)
 	if _, err := io.ReadFull(r, b); err != nil {
