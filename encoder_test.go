@@ -79,7 +79,7 @@ func TestKeepEmpty(t *testing.T) {
 	s := struct {
 		Str1 string `thrift:"1"`
 	}{}
-	err := EncodeStruct(buf, BinaryProtocol, s)
+	err := EncodeStruct(buf, NewBinaryProtocol(true, false), s)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -91,7 +91,7 @@ func TestKeepEmpty(t *testing.T) {
 	s2 := struct {
 		Str1 string `thrift:"1,keepempty"`
 	}{}
-	err = EncodeStruct(buf, BinaryProtocol, s2)
+	err = EncodeStruct(buf, NewBinaryProtocol(true, false), s2)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -106,7 +106,7 @@ func TestEncodeRequired(t *testing.T) {
 	s := struct {
 		Str1 string `thrift:"1,required"`
 	}{}
-	err := EncodeStruct(buf, BinaryProtocol, s)
+	err := EncodeStruct(buf, NewBinaryProtocol(true, false), s)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -118,7 +118,7 @@ func TestEncodeRequired(t *testing.T) {
 	s2 := struct {
 		Str1 *string `thrift:"1,required"`
 	}{}
-	err = EncodeStruct(buf, BinaryProtocol, s2)
+	err = EncodeStruct(buf, NewBinaryProtocol(true, false), s2)
 	_, ok := err.(*MissingRequiredField)
 	if !ok {
 		t.Fatalf("Missing required field should throw MissingRequiredField instead of %+v", err)
@@ -142,13 +142,13 @@ func TestBasics(t *testing.T) {
 	}
 	buf := &bytes.Buffer{}
 
-	err := EncodeStruct(buf, BinaryProtocol, s)
+	err := EncodeStruct(buf, NewBinaryProtocol(true, false), s)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	s2 := &TestStruct{}
-	err = DecodeStruct(buf, BinaryProtocol, s2)
+	err = DecodeStruct(buf, NewBinaryProtocol(true, false), s2)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -164,7 +164,7 @@ func TestEncodeRequiredFields(t *testing.T) {
 	// encode nil pointer required field
 
 	s := &TestStructRequiredOptional{nil, "", nil, ""}
-	err := EncodeStruct(buf, BinaryProtocol, s)
+	err := EncodeStruct(buf, NewBinaryProtocol(true, false), s)
 	if err == nil {
 		t.Fatal("Expected MissingRequiredField exception")
 	}
@@ -180,7 +180,7 @@ func TestEncodeRequiredFields(t *testing.T) {
 
 	str := "foo"
 	s = &TestStructRequiredOptional{&str, "", nil, ""}
-	err = EncodeStruct(buf, BinaryProtocol, s)
+	err = EncodeStruct(buf, NewBinaryProtocol(true, false), s)
 	if err != nil {
 		t.Fatal("Empty non-pointer required fields shouldn't return an error")
 	}
@@ -190,13 +190,13 @@ func TestDecodeRequiredFields(t *testing.T) {
 	buf := &bytes.Buffer{}
 
 	s := &TestEmptyStruct{}
-	err := EncodeStruct(buf, BinaryProtocol, s)
+	err := EncodeStruct(buf, NewBinaryProtocol(true, false), s)
 	if err != nil {
 		t.Fatal("Failed to encode empty struct")
 	}
 
 	s2 := &TestStructRequiredOptional{}
-	err = DecodeStruct(buf, BinaryProtocol, s2)
+	err = DecodeStruct(buf, NewBinaryProtocol(true, false), s2)
 	if err == nil {
 		t.Fatal("Expected MissingRequiredField exception")
 	}
@@ -214,13 +214,13 @@ func TestDecodeUnknownFields(t *testing.T) {
 
 	str := "foo"
 	s := &TestStructRequiredOptional{&str, str, &str, str}
-	err := EncodeStruct(buf, BinaryProtocol, s)
+	err := EncodeStruct(buf, NewBinaryProtocol(true, false), s)
 	if err != nil {
 		t.Fatal("Failed to encode TestStructRequiredOptional struct")
 	}
 
 	s2 := &TestEmptyStruct{}
-	err = DecodeStruct(buf, BinaryProtocol, s2)
+	err = DecodeStruct(buf, NewBinaryProtocol(true, false), s2)
 	if err != nil {
 		t.Fatalf("Unknown fields during decode weren't ignored: %+v", err)
 	}
@@ -233,13 +233,13 @@ func TestDecodeCustom(t *testing.T) {
 	}
 
 	buf := &bytes.Buffer{}
-	err := EncodeStruct(buf, BinaryProtocol, st)
+	err := EncodeStruct(buf, NewBinaryProtocol(true, false), st)
 	if err != nil {
 		t.Fatal("Failed to encode custom struct")
 	}
 
 	st2 := &testCustomStruct{}
-	err = DecodeStruct(buf, BinaryProtocol, st2)
+	err = DecodeStruct(buf, NewBinaryProtocol(true, false), st2)
 	if err != nil {
 		t.Fatalf("Custom fields during decode failed: %+v", err)
 	}
@@ -255,7 +255,7 @@ func BenchmarkEncodeEmptyStruct(b *testing.B) {
 	buf := nullWriter(0)
 	st := &struct{}{}
 	for i := 0; i < b.N; i++ {
-		EncodeStruct(buf, BinaryProtocol, st)
+		EncodeStruct(buf, NewBinaryProtocol(true, false), st)
 	}
 }
 
@@ -263,11 +263,11 @@ func BenchmarkDecodeEmptyStruct(b *testing.B) {
 	b.StopTimer()
 	buf1 := &bytes.Buffer{}
 	st := &struct{}{}
-	EncodeStruct(buf1, BinaryProtocol, st)
+	EncodeStruct(buf1, NewBinaryProtocol(true, false), st)
 	buf := bytes.NewBuffer(bytes.Repeat(buf1.Bytes(), b.N))
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
-		DecodeStruct(buf, BinaryProtocol, st)
+		DecodeStruct(buf, NewBinaryProtocol(true, false), st)
 	}
 }
 
@@ -281,7 +281,7 @@ func BenchmarkEncodeSimpleStruct(b *testing.B) {
 		Int: 123,
 	}
 	for i := 0; i < b.N; i++ {
-		EncodeStruct(buf, BinaryProtocol, st)
+		EncodeStruct(buf, NewBinaryProtocol(true, false), st)
 	}
 }
 
@@ -298,6 +298,6 @@ func BenchmarkDecodeSimpleStruct(b *testing.B) {
 	buf := bytes.NewBuffer(bytes.Repeat(buf1.Bytes(), b.N))
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
-		DecodeStruct(buf, BinaryProtocol, st)
+		DecodeStruct(buf, NewBinaryProtocol(true, false), st)
 	}
 }

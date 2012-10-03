@@ -57,7 +57,7 @@ func startServer() {
 				panic(err)
 				continue
 			}
-			go rpc.ServeCodec(NewServerCodec(NewFramedReadWriteCloser(conn, 0), BinaryProtocol))
+			go rpc.ServeCodec(NewServerCodec(NewFramedReadWriteCloser(conn, 0), NewBinaryProtocol(true, false)))
 		}
 	}()
 }
@@ -65,7 +65,7 @@ func startServer() {
 func TestRPCClientSuccess(t *testing.T) {
 	once.Do(startServer)
 
-	c, err := Dial("tcp", serverAddr, true, BinaryProtocol)
+	c, err := Dial("tcp", serverAddr, true, NewBinaryProtocol(true, false))
 	if err != nil {
 		t.Fatalf("NewClient returned error: %+v", err)
 	}
@@ -82,7 +82,7 @@ func TestRPCClientSuccess(t *testing.T) {
 func TestRPCClientFail(t *testing.T) {
 	once.Do(startServer)
 
-	c, err := Dial("tcp", serverAddr, true, BinaryProtocol)
+	c, err := Dial("tcp", serverAddr, true, NewBinaryProtocol(true, false))
 	if err != nil {
 		t.Fatalf("NewClient returned error: %+v", err)
 	}
@@ -107,7 +107,7 @@ func TestRPCClientFail(t *testing.T) {
 func TestRPCMallocCount(t *testing.T) {
 	once.Do(startServer)
 
-	c, err := Dial("tcp", serverAddr, true, BinaryProtocol)
+	c, err := Dial("tcp", serverAddr, true, NewBinaryProtocol(true, false))
 	if err != nil {
 		t.Fatalf("NewClient returned error: %+v", err)
 	}

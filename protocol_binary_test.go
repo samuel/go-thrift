@@ -80,82 +80,140 @@ func testProtocol(t *testing.T, pr Protocol) {
 		}
 		testString += "012345"
 	}
+
+	// Write a message
+
+	if err := pr.WriteMessageBegin(b, "msgName", 2, 123); err != nil {
+		t.Fatalf("WriteMessageBegin failed: %+v", err)
+	}
+	if err := pr.WriteStructBegin(b, "struct"); err != nil {
+		t.Fatalf("WriteStructBegin failed: %+v", err)
+	}
+
+	if err := pr.WriteFieldBegin(b, "boolTrue", TypeBool, 1); err != nil {
+		t.Fatalf("WriteFieldBegin failed: %+v", err)
+	}
+	if err := pr.WriteBool(b, true); err != nil {
+		t.Fatalf("WriteBool(true) failed: %+v", err)
+	}
+	if err := pr.WriteFieldEnd(b); err != nil {
+		t.Fatalf("WriteFieldEnd failed: %+v", err)
+	}
+
+	if err := pr.WriteFieldBegin(b, "boolFalse", TypeBool, 2); err != nil {
+		t.Fatalf("WriteFieldBegin failed: %+v", err)
+	}
+	if err := pr.WriteBool(b, false); err != nil {
+		t.Fatalf("WriteBool(false) failed: %+v", err)
+	}
+	if err := pr.WriteFieldEnd(b); err != nil {
+		t.Fatalf("WriteFieldEnd failed: %+v", err)
+	}
+
+	if err := pr.WriteFieldStop(b); err != nil {
+		t.Fatalf("WriteStructEnd failed: %+v", err)
+	}
+	if err := pr.WriteStructEnd(b); err != nil {
+		t.Fatalf("WriteStructEnd failed: %+v", err)
+	}
+	if err := pr.WriteMessageEnd(b); err != nil {
+		t.Fatalf("WriteMessageEnd failed: %+v", err)
+	}
+
+	// Read the message
+
+	if name, mtype, seqId, err := pr.ReadMessageBegin(b); err != nil {
+		t.Fatalf("ReadMessageBegin failed: %+v", err)
+	} else if name != "msgName" {
+		t.Fatalf("ReadMessageBegin name mismatch: %s != %s", name, "msgName")
+	} else if mtype != 2 {
+		t.Fatalf("ReadMessageBegin type mismatch: %d != %d", mtype, 2)
+	} else if seqId != 123 {
+		t.Fatalf("ReadMessageBegin seqId mismatch: %d != %d", seqId, 123)
+	}
+	if err := pr.ReadStructBegin(b); err != nil {
+		t.Fatalf("ReadStructBegin failed: %+v", err)
+	}
+
+	if fieldType, id, err := pr.ReadFieldBegin(b); err != nil {
+		t.Fatalf("ReadFieldBegin failed: %+v", err)
+	} else if fieldType != TypeBool {
+		t.Fatalf("ReadFieldBegin type mismatch: %d != %d", fieldType, TypeBool)
+	} else if id != 1 {
+		t.Fatalf("ReadFieldBegin id mismatch: %d != %d", id, 1)
+	}
+	if v, err := pr.ReadBool(b); err != nil {
+		t.Fatalf("ReaBool failed: %+v", err)
+	} else if !v {
+		t.Fatalf("ReadBool value mistmatch %+v != %+v", v, true)
+	}
+	if err := pr.ReadFieldEnd(b); err != nil {
+		t.Fatalf("ReadFieldEnd failed: %+v", err)
+	}
+
+	if fieldType, id, err := pr.ReadFieldBegin(b); err != nil {
+		t.Fatalf("ReadFieldBegin failed: %+v", err)
+	} else if fieldType != TypeBool {
+		t.Fatalf("ReadFieldBegin type mismatch: %d != %d", fieldType, TypeBool)
+	} else if id != 2 {
+		t.Fatalf("ReadFieldBegin id mismatch: %d != %d", id, 2)
+	}
+	if v, err := pr.ReadBool(b); err != nil {
+		t.Fatalf("ReaBool failed: %+v", err)
+	} else if v {
+		t.Fatalf("ReadBool value mistmatch %+v != %+v", v, false)
+	}
+	if err := pr.ReadFieldEnd(b); err != nil {
+		t.Fatalf("ReadFieldEnd failed: %+v", err)
+	}
+
+	if err := pr.ReadStructEnd(b); err != nil {
+		t.Fatalf("ReadStructEnd failed: %+v", err)
+	}
+	if err := pr.ReadMessageEnd(b); err != nil {
+		t.Fatalf("ReadMessageEnd failed: %+v", err)
+	}
 }
 
 func TestBinaryProtocol(t *testing.T) {
-	testProtocol(t, BinaryProtocol)
+	testProtocol(t, NewBinaryProtocol(true, false))
 }
 
 func BenchmarkBinaryProtocolReadByte(b *testing.B) {
 	buf := bytes.NewBuffer(make([]byte, b.N))
-	for i := 0; i < b.N; i++ {
-		BinaryProtocol.ReadByte(buf)
-	}
-}
-
-func BenchmarkBinaryProtocolReadI32(b *testing.B) {
-	buf := bytes.NewBuffer(make([]byte, b.N*4))
-	for i := 0; i < b.N; i++ {
-		BinaryProtocol.ReadI32(buf)
-	}
-}
-
-func BenchmarkBinaryProtocolWriteByte(b *testing.B) {
-	buf := nullWriter(0)
-	for i := 0; i < b.N; i++ {
-		BinaryProtocol.WriteByte(buf, 1)
-	}
-}
-
-func BenchmarkBinaryProtocolWriteI32(b *testing.B) {
-	buf := nullWriter(0)
-	for i := 0; i < b.N; i++ {
-		BinaryProtocol.WriteI32(buf, 1)
-	}
-}
-
-func BenchmarkBinaryProtocolWriteString4(b *testing.B) {
-	buf := nullWriter(0)
-	for i := 0; i < b.N; i++ {
-		BinaryProtocol.WriteString(buf, "test")
-	}
-}
-
-func BenchmarkBinaryProtocolBufferedReadByte(b *testing.B) {
-	buf := bytes.NewBuffer(make([]byte, b.N))
-	p := NewBinaryProtocol(true, false, 256)
+	p := NewBinaryProtocol(true, false)
 	for i := 0; i < b.N; i++ {
 		p.ReadByte(buf)
 	}
 }
 
-func BenchmarkBinaryProtocolBufferedReadI32(b *testing.B) {
+func BenchmarkBinaryProtocolReadI32(b *testing.B) {
 	buf := bytes.NewBuffer(make([]byte, b.N*4))
-	p := NewBinaryProtocol(true, false, 256)
+	p := NewBinaryProtocol(true, false)
 	for i := 0; i < b.N; i++ {
 		p.ReadI32(buf)
 	}
 }
 
-func BenchmarkBinaryProtocolBufferedWriteByte(b *testing.B) {
+func BenchmarkBinaryProtocolWriteByte(b *testing.B) {
 	buf := nullWriter(0)
-	p := NewBinaryProtocol(true, false, 256)
+	p := NewBinaryProtocol(true, false)
 	for i := 0; i < b.N; i++ {
 		p.WriteByte(buf, 1)
 	}
 }
 
-func BenchmarkBinaryProtocolBufferedWriteI32(b *testing.B) {
+func BenchmarkBinaryProtocolWriteI32(b *testing.B) {
 	buf := nullWriter(0)
-	p := NewBinaryProtocol(true, false, 256)
+	p := NewBinaryProtocol(true, false)
 	for i := 0; i < b.N; i++ {
 		p.WriteI32(buf, 1)
 	}
 }
 
-func BenchmarkBinaryProtocolBufferedWriteString4(b *testing.B) {
+func BenchmarkBinaryProtocolWriteString4(b *testing.B) {
 	buf := nullWriter(0)
-	p := NewBinaryProtocol(true, false, 256)
+	p := NewBinaryProtocol(true, false)
 	for i := 0; i < b.N; i++ {
 		p.WriteString(buf, "test")
 	}

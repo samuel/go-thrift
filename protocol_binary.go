@@ -10,9 +10,6 @@ import (
 var (
 	ErrBadVersion              = errors.New("Bad version in ReadMessageBegin")
 	ErrNoProtocolVersionHeader = errors.New("No protocol version header")
-
-	// BinaryProtocol with strictWrite=true and strictRead=false
-	BinaryProtocol = NewBinaryProtocol(true, false, 0)
 )
 
 const (
@@ -28,14 +25,12 @@ type binaryProtocol struct {
 	readBuf     []byte
 }
 
-func NewBinaryProtocol(strictWrite bool, strictRead bool, bufferSize int) Protocol {
+func NewBinaryProtocol(strictWrite bool, strictRead bool) Protocol {
 	p := &binaryProtocol{
 		strictWrite: strictWrite,
 		strictRead:  strictRead,
-	}
-	if bufferSize > 8 {
-		p.writeBuf = make([]byte, bufferSize)
-		p.readBuf = make([]byte, bufferSize)
+		writeBuf:    make([]byte, 32),
+		readBuf:     make([]byte, 32),
 	}
 	return p
 }
@@ -305,61 +300,50 @@ func (p *binaryProtocol) ReadBool(r io.Reader) (bool, error) {
 }
 
 func (p *binaryProtocol) ReadByte(r io.Reader) (value byte, err error) {
-	b := p.readBuf
-	if b == nil {
-		b = []byte{0}
-	}
-	_, err = io.ReadFull(r, b[:1])
-	value = b[0]
+	_, err = io.ReadFull(r, p.readBuf[:1])
+	value = p.readBuf[0]
 	return
 }
 
 func (p *binaryProtocol) ReadI16(r io.Reader) (value int16, err error) {
-	b := p.readBuf
-	if b == nil {
-		b = []byte{0, 0}
-	}
-	_, err = io.ReadFull(r, b[:2])
-	value = int16(binary.BigEndian.Uint16(b))
+	_, err = io.ReadFull(r, p.readBuf[:2])
+	value = int16(binary.BigEndian.Uint16(p.readBuf))
 	return
 }
 
 func (p *binaryProtocol) ReadI32(r io.Reader) (value int32, err error) {
-	b := p.readBuf
-	if b == nil {
-		b = []byte{0, 0, 0, 0}
-	}
-	_, err = io.ReadFull(r, b[:4])
-	value = int32(binary.BigEndian.Uint32(b))
+	_, err = io.ReadFull(r, p.readBuf[:4])
+	value = int32(binary.BigEndian.Uint32(p.readBuf))
 	return
 }
 
 func (p *binaryProtocol) ReadI64(r io.Reader) (value int64, err error) {
-	b := p.readBuf
-	if b == nil {
-		b = []byte{0, 0, 0, 0, 0, 0, 0, 0}
-	}
-	_, err = io.ReadFull(r, b[:8])
-	value = int64(binary.BigEndian.Uint64(b))
+	_, err = io.ReadFull(r, p.readBuf[:8])
+	value = int64(binary.BigEndian.Uint64(p.readBuf))
 	return
 }
 
 func (p *binaryProtocol) ReadDouble(r io.Reader) (value float64, err error) {
-	b := p.readBuf
-	if b == nil {
-		b = []byte{0, 0, 0, 0, 0, 0, 0, 0}
-	}
-	_, err = io.ReadFull(r, b[:8])
-	value = math.Float64frombits(binary.BigEndian.Uint64(b))
+	_, err = io.ReadFull(r, p.readBuf[:8])
+	value = math.Float64frombits(binary.BigEndian.Uint64(p.readBuf))
 	return
 }
 
 func (p *binaryProtocol) ReadString(r io.Reader) (string, error) {
-	bytes, err := p.ReadBytes(r)
-	if err != nil {
+	ln, err := p.ReadI32(r)
+	if err != nil || ln == 0 {
 		return "", err
 	}
-	return string(bytes), nil
+	b := p.readBuf
+	if int(ln) > len(b) {
+		b = make([]byte, ln)
+	} else {
+		b = b[:ln]
+	}
+	if _, err := io.ReadFull(r, b); err != nil {
+		return "", err
+	}
+	return string(b), nil
 }
 
 func (p *binaryProtocol) ReadBytes(r io.Reader) ([]byte, error) {
@@ -367,12 +351,7 @@ func (p *binaryProtocol) ReadBytes(r io.Reader) ([]byte, error) {
 	if err != nil || ln == 0 {
 		return nil, err
 	}
-	b := p.readBuf
-	if b == nil || int(ln) > len(b) {
-		b = make([]byte, ln)
-	} else {
-		b = b[:ln]
-	}
+	b := make([]byte, ln)
 	if _, err := io.ReadFull(r, b); err != nil {
 		return nil, err
 	}
