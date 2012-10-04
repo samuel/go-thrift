@@ -111,11 +111,13 @@ func fieldType(t reflect.Type) byte {
 		return TypeI32
 	case reflect.Int64:
 		return TypeI64
+	case reflect.Float64:
+		return TypeDouble
 	case reflect.Map:
 		return TypeMap
 	case reflect.Slice:
 		elemType := t.Elem()
-		if elemType.Kind() == reflect.Uint8 && elemType.Name() == "byte" {
+		if elemType.Kind() == reflect.Uint8 {
 			return TypeString
 		} else {
 			return TypeList
