@@ -115,7 +115,7 @@ func (d *decoder) readValue(thriftType byte, rf reflect.Value) {
 					v.SetBytes(val)
 				}
 			} else {
-				err = &UnsupportedValueError{Value: v, Str: "expected a byte array"}
+				err = &UnsupportedValueError{Value: v, Str: "decoder expected a byte array"}
 			}
 		} else {
 			if val, err := d.p.ReadString(d.r); err != nil {

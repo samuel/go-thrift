@@ -113,10 +113,10 @@ func (e *encoder) writeValue(v reflect.Value, thriftType byte) {
 	case TypeString:
 		if kind == reflect.Slice {
 			elemType := v.Type().Elem()
-			if elemType.Kind() == reflect.Uint8 && elemType.Name() == "byte" {
+			if elemType.Kind() == reflect.Uint8 {
 				err = e.p.WriteBytes(e.w, v.Bytes())
 			} else {
-				err = &UnsupportedValueError{Value: v, Str: "expected a byte array"}
+				err = &UnsupportedValueError{Value: v, Str: "encoder expected a byte array"}
 			}
 		} else {
 			err = e.p.WriteString(e.w, v.String())
@@ -138,7 +138,7 @@ func (e *encoder) writeValue(v reflect.Value, thriftType byte) {
 		err = e.p.WriteMapEnd(e.w)
 	case TypeList:
 		elemType := v.Type().Elem()
-		if elemType.Kind() == reflect.Uint8 && elemType.Name() == "byte" {
+		if elemType.Kind() == reflect.Uint8 {
 			err = e.p.WriteBytes(e.w, v.Bytes())
 		} else {
 			elemThriftType := fieldType(elemType)
