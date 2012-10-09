@@ -5,12 +5,6 @@ import (
 	"testing"
 )
 
-type nullWriter int
-
-func (n nullWriter) Write(b []byte) (int, error) {
-	return len(b), nil
-}
-
 func testProtocol(t *testing.T, pr Protocol) {
 	b := &bytes.Buffer{}
 
@@ -206,16 +200,18 @@ func TestBinaryProtocol(t *testing.T) {
 }
 
 func BenchmarkBinaryProtocolReadByte(b *testing.B) {
-	buf := bytes.NewBuffer(make([]byte, b.N))
+	buf := &loopingReader{}
 	p := NewBinaryProtocol(true, false)
+	p.WriteByte(buf, 123)
 	for i := 0; i < b.N; i++ {
 		p.ReadByte(buf)
 	}
 }
 
 func BenchmarkBinaryProtocolReadI32(b *testing.B) {
-	buf := bytes.NewBuffer(make([]byte, b.N*4))
+	buf := &loopingReader{}
 	p := NewBinaryProtocol(true, false)
+	p.WriteI32(buf, 1234567890)
 	for i := 0; i < b.N; i++ {
 		p.ReadI32(buf)
 	}

@@ -159,16 +159,27 @@ func TestCompactI32(t *testing.T) {
 }
 
 func BenchmarkCompactProtocolReadByte(b *testing.B) {
-	buf := bytes.NewBuffer(make([]byte, b.N))
+	buf := &loopingReader{}
 	p := NewCompactProtocol()
+	p.WriteByte(buf, 123)
 	for i := 0; i < b.N; i++ {
 		p.ReadByte(buf)
 	}
 }
 
-func BenchmarkCompactProtocolReadI32(b *testing.B) {
-	buf := bytes.NewBuffer(make([]byte, b.N*4))
+func BenchmarkCompactProtocolReadI32Small(b *testing.B) {
+	buf := &loopingReader{}
 	p := NewCompactProtocol()
+	p.WriteI32(buf, 1)
+	for i := 0; i < b.N; i++ {
+		p.ReadI32(buf)
+	}
+}
+
+func BenchmarkCompactProtocolReadI32Large(b *testing.B) {
+	buf := &loopingReader{}
+	p := NewCompactProtocol()
+	p.WriteI32(buf, 1234567890)
 	for i := 0; i < b.N; i++ {
 		p.ReadI32(buf)
 	}
