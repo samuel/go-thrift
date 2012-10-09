@@ -244,3 +244,24 @@ func BenchmarkBinaryProtocolWriteString4(b *testing.B) {
 		p.WriteString(buf, "test")
 	}
 }
+
+func BenchmarkBinaryProtocolWriteFullMessage(b *testing.B) {
+	buf := nullWriter(0)
+	p := NewBinaryProtocol(true, false)
+	for i := 0; i < b.N; i++ {
+		p.WriteMessageBegin(buf, "", 2, 123)
+		p.WriteStructBegin(buf, "")
+		p.WriteFieldBegin(buf, "", TypeBool, 1)
+		p.WriteBool(buf, true)
+		p.WriteFieldEnd(buf)
+		p.WriteFieldBegin(buf, "", TypeBool, 3)
+		p.WriteBool(buf, false)
+		p.WriteFieldEnd(buf)
+		p.WriteFieldBegin(buf, "", TypeString, 2)
+		p.WriteString(buf, "foo")
+		p.WriteFieldEnd(buf)
+		p.WriteFieldStop(buf)
+		p.WriteStructEnd(buf)
+		p.WriteMessageEnd(buf)
+	}
+}

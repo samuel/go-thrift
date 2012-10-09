@@ -157,3 +157,64 @@ func TestCompactI32(t *testing.T) {
 		}
 	}
 }
+
+func BenchmarkCompactProtocolReadByte(b *testing.B) {
+	buf := bytes.NewBuffer(make([]byte, b.N))
+	p := NewCompactProtocol()
+	for i := 0; i < b.N; i++ {
+		p.ReadByte(buf)
+	}
+}
+
+func BenchmarkCompactProtocolReadI32(b *testing.B) {
+	buf := bytes.NewBuffer(make([]byte, b.N*4))
+	p := NewCompactProtocol()
+	for i := 0; i < b.N; i++ {
+		p.ReadI32(buf)
+	}
+}
+
+func BenchmarkCompactProtocolWriteByte(b *testing.B) {
+	buf := nullWriter(0)
+	p := NewCompactProtocol()
+	for i := 0; i < b.N; i++ {
+		p.WriteByte(buf, 1)
+	}
+}
+
+func BenchmarkCompactProtocolWriteI32(b *testing.B) {
+	buf := nullWriter(0)
+	p := NewCompactProtocol()
+	for i := 0; i < b.N; i++ {
+		p.WriteI32(buf, 1)
+	}
+}
+
+func BenchmarkCompactProtocolWriteString4(b *testing.B) {
+	buf := nullWriter(0)
+	p := NewCompactProtocol()
+	for i := 0; i < b.N; i++ {
+		p.WriteString(buf, "test")
+	}
+}
+
+func BenchmarkCompactProtocolWriteFullMessage(b *testing.B) {
+	buf := nullWriter(0)
+	p := NewCompactProtocol()
+	for i := 0; i < b.N; i++ {
+		p.WriteMessageBegin(buf, "", 2, 123)
+		p.WriteStructBegin(buf, "")
+		p.WriteFieldBegin(buf, "", TypeBool, 1)
+		p.WriteBool(buf, true)
+		p.WriteFieldEnd(buf)
+		p.WriteFieldBegin(buf, "", TypeBool, 3)
+		p.WriteBool(buf, false)
+		p.WriteFieldEnd(buf)
+		p.WriteFieldBegin(buf, "", TypeString, 2)
+		p.WriteString(buf, "foo")
+		p.WriteFieldEnd(buf)
+		p.WriteFieldStop(buf)
+		p.WriteStructEnd(buf)
+		p.WriteMessageEnd(buf)
+	}
+}
