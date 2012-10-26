@@ -5,25 +5,91 @@ import (
 	"io/ioutil"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/samuel/go-parse"
 )
 
+type Type struct {
+	Name      string
+	KeyType   *Type // If map
+	ValueType *Type // If map or list
+}
+
+type EnumValue struct {
+	Name  string
+	Value int
+}
+
+type Enum struct {
+	Name   string
+	Values map[string]*EnumValue
+}
+
 type Constant struct {
-	Type  string
+	Type  *Type
 	Value interface{}
 }
 
 type Field struct {
+	Id       int
 	Name     string
 	Optional bool
-	Type     interface{} // TODO: Use something more convenient than interface{}
+	Type     *Type
 	Default  interface{}
 }
 
 type Struct struct {
-	Fields map[int]Field
+	Name   string
+	Fields map[int]*Field
 }
+
+type Method struct {
+	Name       string
+	ReturnType *Type
+	Fields     map[int]*Field
+	Exceptions map[int]*Field
+}
+
+type Service struct {
+	Name    string
+	Methods map[string]*Method
+}
+
+type Thrift struct {
+	Includes   map[string]*Thrift
+	Namespaces map[string]string
+	Constants  map[string]*Constant
+	Enums      map[string]*Enum
+	Structs    map[string]*Struct
+	Exceptions map[string]*Struct
+	Services   map[string]*Service
+}
+
+var (
+	Spec = parsec.Spec{
+		CommentStart:   "/*",
+		CommentEnd:     "*/",
+		CommentLine:    parsec.Any(parsec.String("#"), parsec.String("//")),
+		NestedComments: true,
+		IdentStart: parsec.Satisfy(
+			func(c rune) bool {
+				return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '_'
+			}),
+		IdentLetter: parsec.Satisfy(
+			func(c rune) bool {
+				return (c >= 'A' && c <= 'Z') ||
+					(c >= 'a' && c <= 'z') ||
+					(c >= '0' && c <= '9') ||
+					c == '.' || c == '_'
+			}),
+		ReservedNames: []parsec.Output{
+			"namespace", "struct", "enum", "const", "service", "throws",
+			"required", "optional", "exception", "list", "map",
+		},
+	}
+	Parser = buildParser()
+)
 
 func quotedString() parsec.Parser {
 	return func(in parsec.Vessel) (parsec.Output, bool) {
@@ -164,48 +230,54 @@ func symbolDispatcher(table map[string]parsec.Parser) parsec.Parser {
 	}
 }
 
-func main() {
-	in := new(parsec.StringVessel)
-	in.SetSpec(parsec.Spec{
-		CommentStart:   "/*",
-		CommentEnd:     "*/",
-		CommentLine:    parsec.Any(parsec.String("#"), parsec.String("//")),
-		NestedComments: true,
-		IdentStart: parsec.Satisfy(
-			func(c rune) bool {
-				return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '_'
-			}),
-		IdentLetter: parsec.Satisfy(
-			func(c rune) bool {
-				return (c >= 'A' && c <= 'Z') ||
-					(c >= 'a' && c <= 'z') ||
-					(c >= '0' && c <= '9') ||
-					c == '.' || c == '_'
-			}),
-		ReservedNames: []parsec.Output{
-			"namespace", "struct", "enum", "const", "service", "throws",
-			"required", "optional", "exception", "list", "map",
-		},
-	})
-
-	f, err := os.Open("cassandra.thrift")
-	if err != nil {
-		panic(err)
+func nilParser() parsec.Parser {
+	return func(in parsec.Vessel) (parsec.Output, bool) {
+		return nil, true
 	}
-	b, err := ioutil.ReadAll(f)
-	if err != nil {
-		panic(err)
-	}
-	in.SetInput(string(b))
+}
 
+func parseType(t interface{}) *Type {
+	typ := &Type{}
+	switch t2 := t.(type) {
+	case string:
+		typ.Name = t2
+	case []interface{}:
+		typ.Name = t2[0].(string)
+		if typ.Name == "map" {
+			typ.KeyType = parseType(t2[2])
+			typ.ValueType = parseType(t2[4])
+		} else if typ.Name == "list" {
+			typ.ValueType = parseType(t2[2])
+		} else {
+			panic("Basic type should never not be map or list: " + typ.Name)
+		}
+	default:
+		panic("Type should never be anything but string or []interface{}")
+	}
+	return typ
+}
+
+func parseFields(fi []interface{}) map[int]*Field {
+	fields := make(map[int]*Field)
+	for _, f := range fi {
+		parts := f.([]interface{})
+		field := &Field{}
+		field.Id = int(parts[0].(int64))
+		field.Optional = strings.ToLower(parts[2].(string)) == "optional"
+		field.Type = parseType(parts[3])
+		field.Name = parts[4].(string)
+		field.Default = parts[5]
+		fields[field.Id] = field
+	}
+	return fields
+}
+
+func buildParser() parsec.Parser {
 	constantValue := parsec.Lexeme(parsec.Any(quotedString(), integer(), float()))
 	namespaceDef := parsec.Collect(
-		// parsec.Symbol("namespace"),
 		parsec.Identifier(), parsec.Identifier())
 	includeDef := parsec.Collect(
-		// parsec.Symbol("include"),
 		parsec.Lexeme(quotedString()))
-	// TODO: Should be recursive
 	var typeDef func(in parsec.Vessel) (parsec.Output, bool)
 	recurseTypeDef := func(in parsec.Vessel) (parsec.Output, bool) {
 		return typeDef(in)
@@ -224,16 +296,14 @@ func main() {
 			parsec.Symbol(">")),
 	)
 	constDef := parsec.Collect(
-		// parsec.Symbol("const"),
 		typeDef, parsec.Identifier(), parsec.Symbol("="), constantValue)
 	enumItemDef := parsec.Collect(
 		parsec.Identifier(),
 		parsec.Any(
 			parsec.All(parsec.Symbol("="), parsec.Lexeme(integer())),
-			parsec.Symbol(""),
+			nilParser(),
 		))
 	enumDef := parsec.Collect(
-		// parsec.Symbol("enum"),
 		parsec.Identifier(),
 		parsec.Symbol("{"),
 		parsec.SepBy(parsec.Symbol(","), enumItemDef),
@@ -243,24 +313,17 @@ func main() {
 		parsec.Lexeme(integer()), parsec.Symbol(":"),
 		parsec.Any(parsec.Symbol("required"), parsec.Symbol("optional"), parsec.Symbol("")),
 		typeDef, parsec.Identifier(),
+		// Default
 		parsec.Any(
 			parsec.All(parsec.Symbol("="),
 				parsec.Lexeme(parsec.Any(
 					parsec.Identifier(), quotedString(),
 					parsec.Try(float()), integer()))),
-			parsec.Symbol(""),
+			nilParser(),
 		),
 		parsec.Skip(parsec.Many(parsec.Symbol(","))),
 	)
-	exceptionDef := parsec.Collect(
-		// parsec.Symbol("exception"),
-		parsec.Identifier(),
-		parsec.Symbol("{"),
-		parsec.Many(structFieldDef),
-		parsec.Symbol("}"),
-	)
 	structDef := parsec.Collect(
-		// parsec.Symbol("struct"),
 		parsec.Identifier(),
 		parsec.Symbol("{"),
 		parsec.Many(structFieldDef),
@@ -279,79 +342,148 @@ func main() {
 				parsec.Many(structFieldDef),
 				parsec.Symbol(")"),
 			),
-			parsec.Symbol(""),
+			nilParser(),
 		),
 		parsec.Any(parsec.Symbol(","), parsec.Symbol("")),
 	)
 	serviceDef := parsec.Collect(
-		// parsec.Symbol("service"),
 		parsec.Identifier(),
 		parsec.Symbol("{"),
 		parsec.Many(serviceMethodDef),
 		parsec.Symbol("}"),
 	)
-	// thriftSpec := parsec.All(parsec.Whitespace(), parsec.Many(parsec.Any(
-	// 	namespaceDef,
-	// 	constDef,
-	// 	includeDef,
-	// 	parsec.Try(enumDef),
-	// 	exceptionDef,
-	// 	parsec.Try(structDef),
-	// 	serviceDef,
-	// )))
 	thriftSpec := parsec.All(parsec.Whitespace(), parsec.Many(
 		symbolDispatcher(map[string]parsec.Parser{
 			"namespace": namespaceDef,
 			"const":     constDef,
 			"include":   includeDef,
 			"enum":      enumDef,
-			"exception": exceptionDef,
+			"exception": structDef,
 			"struct":    structDef,
 			"service":   serviceDef,
 		}),
 	))
+	return thriftSpec
+}
 
-	out, ok := thriftSpec(in)
+func outputToThrift(obj parsec.Output) *Thrift {
+	thrift := &Thrift{
+		Namespaces: make(map[string]string),
+		Constants:  make(map[string]*Constant),
+		Enums:      make(map[string]*Enum),
+		Structs:    make(map[string]*Struct),
+		Exceptions: make(map[string]*Struct),
+		Services:   make(map[string]*Service),
+	}
 
-	// if _, unfinished := in.Next(); unfinished {
-	// 	fmt.Printf("Incomplete parse: %+v\n", out)
-	// 	fmt.Println("Parse error.")
-	// 	fmt.Printf("Position: %+v\n", in.GetPosition())
-	// 	fmt.Printf("State: %+v\n", in.GetState())
-	// 	fmt.Printf("Rest: `%s`\n", in.GetInput())
-	// 	return
-	// }
-
-	fmt.Printf("Parsed: %#v\n", ok)
-	// fmt.Printf("Tree: %+v\n", out)
-	// fmt.Printf("Rest: %#v\n", in.GetInput())
-
-	namespaces := make(map[string]string)
-	constants := make(map[string]Constant)
-	structs := make(map[string]Struct)
-
-	thrift := out.([]interface{})
-	for _, symI := range thrift {
+	for _, symI := range obj.([]interface{}) {
 		sym := symI.(symbolValue)
 		val := sym.value.([]interface{})
 		switch sym.symbol {
 		case "namespace":
-			namespaces[val[0].(string)] = val[1].(string)
+			thrift.Namespaces[val[0].(string)] = val[1].(string)
 		case "const":
-			constants[val[1].(string)] = Constant{val[0].(string), val[3]}
+			thrift.Constants[val[1].(string)] = &Constant{&Type{Name: val[0].(string)}, val[3]}
+		case "enum":
+			// enum: [ConsistencyLevel { [[ONE 1] [QUORUM 2] [LOCAL_QUORUM 3] [EACH_QUORUM 4] [ALL 5] [ANY 6] [TWO 7] [THREE 8]] }]
+			en := &Enum{
+				Name:   val[0].(string),
+				Values: make(map[string]*EnumValue),
+			}
+			next := 0
+			for _, e := range val[2].([]interface{}) {
+				parts := e.([]interface{})
+				name := parts[0].(string)
+				val := -1
+				if parts[1] != nil {
+					val = int(parts[1].(int64))
+				} else {
+					val = next
+				}
+				if val >= next {
+					next = val + 1
+				}
+				en.Values[name] = &EnumValue{name, val}
+			}
+			thrift.Enums[en.Name] = en
 		case "struct":
-			st := Struct{
-				Fields: make(map[int]Field),
+			thrift.Structs[val[0].(string)] = &Struct{
+				Name:   val[0].(string),
+				Fields: parseFields(val[2].([]interface{})),
 			}
-			// fmt.Printf("%+v\n", val)
-			for _, f := range val[2].([]interface{}) {
-				fmt.Printf("%+v\n", f)
+		case "exception":
+			thrift.Exceptions[val[0].(string)] = &Struct{
+				Name:   val[0].(string),
+				Fields: parseFields(val[2].([]interface{})),
 			}
-			structs[val[0].(string)] = st
-			// default:
-			// 	fmt.Printf("UNKNOWN symbol %s: %+v\n", sym.symbol, val)
+		case "service":
+			s := &Service{
+				Name:    val[0].(string),
+				Methods: make(map[string]*Method),
+			}
+			for _, m := range val[2].([]interface{}) {
+				parts := m.([]interface{})
+				var exc map[int]*Field = nil
+				if parts[5] != nil {
+					exc = parseFields((parts[5].([]interface{}))[2].([]interface{}))
+				} else {
+					exc = make(map[int]*Field)
+				}
+				method := &Method{
+					Name:       parts[1].(string),
+					ReturnType: parseType(parts[0]),
+					Fields:     parseFields(parts[3].([]interface{})),
+					Exceptions: exc,
+				}
+				s.Methods[method.Name] = method
+			}
+			thrift.Services[s.Name] = s
+		default:
+			panic("Should never have an unhandled symbol: " + sym.symbol)
 		}
 	}
-	fmt.Printf("Namespaces: %+v\n", namespaces)
-	fmt.Printf("Constants: %+v\n", constants)
+	return thrift
+}
+
+// func Parse(name string, r io.Reader) (*Thrift, error) {
+// 	parsec.Vessel
+// }
+
+func main() {
+	in := new(parsec.StringVessel)
+	in.SetSpec(Spec)
+
+	f, err := os.Open("cassandra.thrift")
+	if err != nil {
+		panic(err)
+	}
+	b, err := ioutil.ReadAll(f)
+	if err != nil {
+		panic(err)
+	}
+	in.SetInput(string(b))
+
+	out, ok := Parser(in)
+
+	if _, unfinished := in.Next(); unfinished {
+		fmt.Printf("Incomplete parse: %+v\n", out)
+		fmt.Println("Parse error.")
+		fmt.Printf("Position: %+v\n", in.GetPosition())
+		fmt.Printf("State: %+v\n", in.GetState())
+		fmt.Printf("Rest: `%s`\n", in.GetInput())
+		return
+	}
+
+	fmt.Printf("Parsed: %#v\n", ok)
+	// fmt.Printf("Tree: %+v\n", out)
+	fmt.Printf("Rest: %#v\n", in.GetInput())
+
+	// t := outputToThrift(out)
+
+	// fmt.Printf("Namespaces: %+v\n", t.Namespaces)
+	// fmt.Printf("Constants: %+v\n", t.Constants)
+	// fmt.Printf("Enums: %+v\n", t.Enums)
+	// fmt.Printf("Structs: %+v\n", t.Structs)
+	// fmt.Printf("Exceptions: %+v\n", t.Exceptions)
+	// fmt.Printf("Services: %+v\n", t.Services)
 }

@@ -134,7 +134,9 @@ func fieldType(t reflect.Type) byte {
 
 func isEmptyValue(v reflect.Value) bool {
 	switch v.Kind() {
-	case reflect.Array, reflect.Map, reflect.Slice, reflect.String:
+	case reflect.Array, reflect.Map, reflect.Slice:
+		return v.IsNil()
+	case reflect.String:
 		return v.Len() == 0
 	case reflect.Bool:
 		return !v.Bool()
