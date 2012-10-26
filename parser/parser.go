@@ -1,9 +1,10 @@
-package main
+package parser
 
 import (
+	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
-	"os"
 	"strconv"
 	"strings"
 
@@ -66,7 +67,21 @@ type Thrift struct {
 	Services   map[string]*Service
 }
 
+type ErrSyntaxError struct {
+	File   string
+	Line   int
+	Column int
+	Offset int
+}
+
+func (e *ErrSyntaxError) Error() string {
+	return fmt.Sprintf("Syntax Error %s:%d line %d offset %d",
+		e.File, e.Line, e.Column, e.Offset)
+}
+
 var (
+	ErrParserFail = errors.New("Parsing failed entirely")
+
 	Spec = parsec.Spec{
 		CommentStart:   "/*",
 		CommentEnd:     "*/",
@@ -445,45 +460,31 @@ func outputToThrift(obj parsec.Output) *Thrift {
 	return thrift
 }
 
-// func Parse(name string, r io.Reader) (*Thrift, error) {
-// 	parsec.Vessel
-// }
+func Parse(name string, r io.Reader) (*Thrift, error) {
+	b, err := ioutil.ReadAll(r)
+	if err != nil {
+		panic(err)
+	}
 
-func main() {
-	in := new(parsec.StringVessel)
+	in := &parsec.StringVessel{}
 	in.SetSpec(Spec)
-
-	f, err := os.Open("cassandra.thrift")
-	if err != nil {
-		panic(err)
-	}
-	b, err := ioutil.ReadAll(f)
-	if err != nil {
-		panic(err)
-	}
 	in.SetInput(string(b))
-
 	out, ok := Parser(in)
 
-	if _, unfinished := in.Next(); unfinished {
-		fmt.Printf("Incomplete parse: %+v\n", out)
-		fmt.Println("Parse error.")
-		fmt.Printf("Position: %+v\n", in.GetPosition())
-		fmt.Printf("State: %+v\n", in.GetState())
-		fmt.Printf("Rest: `%s`\n", in.GetInput())
-		return
+	if !ok {
+		return nil, ErrParserFail
 	}
 
-	fmt.Printf("Parsed: %#v\n", ok)
-	// fmt.Printf("Tree: %+v\n", out)
-	fmt.Printf("Rest: %#v\n", in.GetInput())
+	_, unfinished := in.Next()
+	if unfinished {
+		pos := in.GetPosition()
+		return nil, &ErrSyntaxError{
+			File:   pos.Name,
+			Line:   pos.Line,
+			Column: pos.Column,
+			Offset: pos.Offset,
+		}
+	}
 
-	// t := outputToThrift(out)
-
-	// fmt.Printf("Namespaces: %+v\n", t.Namespaces)
-	// fmt.Printf("Constants: %+v\n", t.Constants)
-	// fmt.Printf("Enums: %+v\n", t.Enums)
-	// fmt.Printf("Structs: %+v\n", t.Structs)
-	// fmt.Printf("Exceptions: %+v\n", t.Exceptions)
-	// fmt.Printf("Services: %+v\n", t.Services)
+	return outputToThrift(out), nil
 }
