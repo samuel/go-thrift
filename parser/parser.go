@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"os"
 	"strconv"
 	"strings"
 
@@ -67,6 +68,14 @@ type Thrift struct {
 	Services   map[string]*Service
 }
 
+type Filesystem interface {
+	Open(filename string) (io.ReadCloser, error)
+}
+
+type Parser struct {
+	Filesystem Filesystem // For handling includes. Can be set to nil to fall back to os package.
+}
+
 type ErrSyntaxError struct {
 	File   string
 	Line   int
@@ -75,7 +84,7 @@ type ErrSyntaxError struct {
 }
 
 func (e *ErrSyntaxError) Error() string {
-	return fmt.Sprintf("Syntax Error %s:%d line %d offset %d",
+	return fmt.Sprintf("Syntax Error %s:%d column %d offset %d",
 		e.File, e.Line, e.Column, e.Offset)
 }
 
@@ -103,7 +112,7 @@ var (
 			"required", "optional", "exception", "list", "map",
 		},
 	}
-	Parser = buildParser()
+	Parsec = buildParser()
 )
 
 func quotedString() parsec.Parser {
@@ -381,7 +390,7 @@ func buildParser() parsec.Parser {
 	return thriftSpec
 }
 
-func outputToThrift(obj parsec.Output) *Thrift {
+func (p *Parser) outputToThrift(obj parsec.Output) (*Thrift, error) {
 	thrift := &Thrift{
 		Namespaces: make(map[string]string),
 		Constants:  make(map[string]*Constant),
@@ -389,6 +398,7 @@ func outputToThrift(obj parsec.Output) *Thrift {
 		Structs:    make(map[string]*Struct),
 		Exceptions: make(map[string]*Struct),
 		Services:   make(map[string]*Service),
+		Includes:   make(map[string]*Thrift),
 	}
 
 	for _, symI := range obj.([]interface{}) {
@@ -453,14 +463,22 @@ func outputToThrift(obj parsec.Output) *Thrift {
 				s.Methods[method.Name] = method
 			}
 			thrift.Services[s.Name] = s
+		case "include":
+			filename := val[0].(string)
+			filename = filename[1 : len(filename)-1]
+			tr, err := p.ParseFile(filename)
+			if err != nil {
+				return nil, err
+			}
+			thrift.Includes[strings.Split(filename, ".")[0]] = tr
 		default:
 			panic("Should never have an unhandled symbol: " + sym.symbol)
 		}
 	}
-	return thrift
+	return thrift, nil
 }
 
-func Parse(name string, r io.Reader) (*Thrift, error) {
+func (p *Parser) Parse(r io.Reader) (*Thrift, error) {
 	b, err := ioutil.ReadAll(r)
 	if err != nil {
 		panic(err)
@@ -469,7 +487,7 @@ func Parse(name string, r io.Reader) (*Thrift, error) {
 	in := &parsec.StringVessel{}
 	in.SetSpec(Spec)
 	in.SetInput(string(b))
-	out, ok := Parser(in)
+	out, ok := Parsec(in)
 
 	if !ok {
 		return nil, ErrParserFail
@@ -486,5 +504,21 @@ func Parse(name string, r io.Reader) (*Thrift, error) {
 		}
 	}
 
-	return outputToThrift(out), nil
+	return p.outputToThrift(out)
+}
+
+func (p *Parser) ParseFile(filename string) (*Thrift, error) {
+	var r io.ReadCloser
+	var err error
+	if p.Filesystem != nil {
+		r, err = p.Filesystem.Open(filename)
+	} else {
+		r, err = os.Open(filename)
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer r.Close()
+
+	return p.Parse(r)
 }
