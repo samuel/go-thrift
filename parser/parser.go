@@ -91,7 +91,7 @@ func (e *ErrSyntaxError) Error() string {
 var (
 	ErrParserFail = errors.New("Parsing failed entirely")
 
-	Spec = parsec.Spec{
+	spec = parsec.Spec{
 		CommentStart:   "/*",
 		CommentEnd:     "*/",
 		CommentLine:    parsec.Any(parsec.String("#"), parsec.String("//")),
@@ -112,7 +112,7 @@ var (
 			"required", "optional", "exception", "list", "map",
 		},
 	}
-	Parsec = buildParser()
+	simpleParser = buildParser()
 )
 
 func quotedString() parsec.Parser {
@@ -181,7 +181,7 @@ func integer() parsec.Parser {
 			runes = append(runes, next)
 		}
 
-		// We're guarantted to only have integers here so don't check the error
+		// We're guaranteed to only have integers here so don't check the error
 		i64, _ := strconv.ParseInt(string(runes), 10, 64)
 		return i64, true
 	}
@@ -485,9 +485,9 @@ func (p *Parser) Parse(r io.Reader) (*Thrift, error) {
 	}
 
 	in := &parsec.StringVessel{}
-	in.SetSpec(Spec)
+	in.SetSpec(spec)
 	in.SetInput(string(b))
-	out, ok := Parsec(in)
+	out, ok := simpleParser(in)
 
 	if !ok {
 		return nil, ErrParserFail
