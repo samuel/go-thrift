@@ -60,6 +60,7 @@ type Service struct {
 
 type Thrift struct {
 	Includes   map[string]*Thrift
+	Typedefs   map[string]*Type
 	Namespaces map[string]string
 	Constants  map[string]*Constant
 	Enums      map[string]*Enum
@@ -81,6 +82,7 @@ type ErrSyntaxError struct {
 	Line   int
 	Column int
 	Offset int
+	Left   string
 }
 
 func (e *ErrSyntaxError) Error() string {
@@ -164,7 +166,7 @@ func quotedString() parsec.Parser {
 func integer() parsec.Parser {
 	return func(in parsec.Vessel) (parsec.Output, bool) {
 		next, ok := in.Next()
-		if !ok || !(next >= '0' && next <= '9') {
+		if !ok || ((next < '0' || next > '9') && next != '-') {
 			return nil, false
 		}
 
@@ -190,7 +192,7 @@ func integer() parsec.Parser {
 func float() parsec.Parser {
 	return func(in parsec.Vessel) (parsec.Output, bool) {
 		next, ok := in.Next()
-		if !ok || !(next >= '0' && next <= '9') {
+		if !ok || ((next < '0' || next > '9') && next != '-') {
 			return nil, false
 		}
 
@@ -319,6 +321,7 @@ func buildParser() parsec.Parser {
 			recurseTypeDef,
 			parsec.Symbol(">")),
 	)
+	typedefDef := parsec.Collect(typeDef, parsec.Identifier())
 	constDef := parsec.Collect(
 		typeDef, parsec.Identifier(), parsec.Symbol("="), constantValue)
 	enumItemDef := parsec.Collect(
@@ -379,6 +382,7 @@ func buildParser() parsec.Parser {
 	thriftSpec := parsec.All(parsec.Whitespace(), parsec.Many(
 		symbolDispatcher(map[string]parsec.Parser{
 			"namespace": namespaceDef,
+			"typedef":   typedefDef,
 			"const":     constDef,
 			"include":   includeDef,
 			"enum":      enumDef,
@@ -393,6 +397,7 @@ func buildParser() parsec.Parser {
 func (p *Parser) outputToThrift(obj parsec.Output) (*Thrift, error) {
 	thrift := &Thrift{
 		Namespaces: make(map[string]string),
+		Typedefs:   make(map[string]*Type),
 		Constants:  make(map[string]*Constant),
 		Enums:      make(map[string]*Enum),
 		Structs:    make(map[string]*Struct),
@@ -407,6 +412,8 @@ func (p *Parser) outputToThrift(obj parsec.Output) (*Thrift, error) {
 		switch sym.symbol {
 		case "namespace":
 			thrift.Namespaces[val[0].(string)] = val[1].(string)
+		case "typedef":
+			thrift.Typedefs[val[1].(string)] = parseType(val[0])
 		case "const":
 			thrift.Constants[val[1].(string)] = &Constant{&Type{Name: val[0].(string)}, val[3]}
 		case "enum":
@@ -501,6 +508,7 @@ func (p *Parser) Parse(r io.Reader) (*Thrift, error) {
 			Line:   pos.Line,
 			Column: pos.Column,
 			Offset: pos.Offset,
+			Left:   in.GetInput().(string),
 		}
 	}
 
