@@ -114,6 +114,10 @@ func fieldType(t reflect.Type) byte {
 	case reflect.Float64:
 		return TypeDouble
 	case reflect.Map:
+		valueType := t.Elem()
+		if valueType.Kind() == reflect.Interface && valueType.Name() == "" {
+			return TypeSet
+		}
 		return TypeMap
 	case reflect.Slice:
 		elemType := t.Elem()

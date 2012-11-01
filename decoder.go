@@ -204,18 +204,37 @@ func (d *decoder) readValue(thriftType byte, rf reflect.Value) {
 			d.error(err)
 		}
 	case TypeSet:
-		elemType := v.Type().Elem()
-		et, n, err := d.p.ReadSetBegin(d.r)
-		if err != nil {
-			d.error(err)
-		}
-		for i := 0; i < n; i++ {
-			val := reflect.New(elemType)
-			d.readValue(et, val.Elem())
-			v.Set(reflect.Append(v, val.Elem()))
-		}
-		if err := d.p.ReadSetEnd(d.r); err != nil {
-			d.error(err)
+		if v.Type().Kind() == reflect.Slice {
+			elemType := v.Type().Elem()
+			et, n, err := d.p.ReadSetBegin(d.r)
+			if err != nil {
+				d.error(err)
+			}
+			for i := 0; i < n; i++ {
+				val := reflect.New(elemType)
+				d.readValue(et, val.Elem())
+				v.Set(reflect.Append(v, val.Elem()))
+			}
+			if err := d.p.ReadSetEnd(d.r); err != nil {
+				d.error(err)
+			}
+		} else if v.Type().Kind() == reflect.Map {
+			elemType := v.Type().Key()
+			et, n, err := d.p.ReadSetBegin(d.r)
+			if err != nil {
+				d.error(err)
+			}
+			v.Set(reflect.MakeMap(v.Type()))
+			for i := 0; i < n; i++ {
+				key := reflect.New(elemType).Elem()
+				d.readValue(et, key)
+				v.SetMapIndex(key, reflect.ValueOf(true))
+			}
+			if err := d.p.ReadSetEnd(d.r); err != nil {
+				d.error(err)
+			}
+		} else {
+			d.error(&UnsupportedTypeError{v.Type()})
 		}
 	default:
 		d.error(&UnsupportedTypeError{v.Type()})

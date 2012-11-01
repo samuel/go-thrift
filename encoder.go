@@ -132,8 +132,8 @@ func (e *encoder) writeValue(v reflect.Value, thriftType byte) {
 			e.error(er)
 		}
 		for _, k := range v.MapKeys() {
-			e.writeValue(k, fieldType(keyType))
-			e.writeValue(v.MapIndex(k), fieldType(valueType))
+			e.writeValue(k, keyThriftType)
+			e.writeValue(v.MapIndex(k), valueThriftType)
 		}
 		err = e.p.WriteMapEnd(e.w)
 	case TypeList:
@@ -152,16 +152,30 @@ func (e *encoder) writeValue(v reflect.Value, thriftType byte) {
 			err = e.p.WriteListEnd(e.w)
 		}
 	case TypeSet:
-		elemType := v.Type().Elem()
-		elemThriftType := fieldType(elemType)
-		if er := e.p.WriteSetBegin(e.w, elemThriftType, v.Len()); er != nil {
-			e.error(er)
+		if v.Type().Kind() == reflect.Slice {
+			elemType := v.Type().Elem()
+			elemThriftType := fieldType(elemType)
+			if er := e.p.WriteSetBegin(e.w, elemThriftType, v.Len()); er != nil {
+				e.error(er)
+			}
+			n := v.Len()
+			for i := 0; i < n; i++ {
+				e.writeValue(v.Index(i), elemThriftType)
+			}
+			err = e.p.WriteSetEnd(e.w)
+		} else if v.Type().Kind() == reflect.Map {
+			elemType := v.Type().Key()
+			elemThriftType := fieldType(elemType)
+			if er := e.p.WriteSetBegin(e.w, elemThriftType, v.Len()); er != nil {
+				e.error(er)
+			}
+			for _, k := range v.MapKeys() {
+				e.writeValue(k, elemThriftType)
+			}
+			err = e.p.WriteSetEnd(e.w)
+		} else {
+			e.error(&UnsupportedTypeError{v.Type()})
 		}
-		n := v.Len()
-		for i := 0; i < n; i++ {
-			e.writeValue(v.Index(i), elemThriftType)
-		}
-		err = e.p.WriteSetEnd(e.w)
 	default:
 		e.error(&UnsupportedTypeError{v.Type()})
 	}
