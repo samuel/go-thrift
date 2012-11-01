@@ -14,7 +14,9 @@ import (
 var (
 	goTemplate = `{{define "field"}}{{.Name|camelCase}} {{.Type|mapType}} ` + "`" + `thrift:"{{.Id}}{{if .Optional}}{{else}},required{{end}}" json:"{{.Name}}"` + "`" + `{{end}}` +
 		`{{define "argumentList"}}{{range $i, $a := .}}{{if $i|first|not}}, {{end}}{{$a.Name|lowerCamelCase}} {{$a.Type|mapType}}{{end}}{{end}}` +
-		`{{range $name, $enum := .Enums}}
+		`{{range $name, $type := .Typedefs}}
+type {{$name|camelCase}} {{$type|mapType}}
+{{end}}{{range $name, $enum := .Enums}}
 type {{$name|camelCase}} int32
 
 var ({{range $vname, $vid := .Values}}
@@ -120,6 +122,9 @@ func mapType(def *parser.Thrift, typ *parser.Type) string {
 			keyType = "string"
 		}
 		return "map[" + keyType + "]" + mapType(def, typ.ValueType)
+	}
+	if t := def.Typedefs[typ.Name]; t != nil {
+		return typ.Name
 	}
 	if e := def.Enums[typ.Name]; e != nil {
 		return typ.Name
