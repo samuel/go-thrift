@@ -64,3 +64,9 @@ then `Flush() error` is called after `protocol.WriteMessageEnd`.
 
 _Framed transport_ is supported by wrapping a value implementing
 `io.ReadWriteCloser` with `thrift.NewFramedReadWriteCloser(value)`
+
+### Parser & Code Generator
+
+The "parser" subdirectory contains a Thrift IDL parser, and "generator"
+contains a Go code generator. It could be extended to include other
+languages in the future.
