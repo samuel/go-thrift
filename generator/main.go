@@ -12,21 +12,7 @@ import (
 )
 
 var (
-	goTemplate *template.Template
-)
-
-func init() {
-	funcMap := map[string]interface{}{
-		"camelCase":      camelCase,
-		"lowerCamelCase": lowerCamelCase,
-		"mapType":        mapType,
-		"returnType":     returnType,
-		"first":          func(i int) bool { return i == 1 },
-	}
-
-	goTemplate = template.New("go")
-	goTemplate.Funcs(funcMap)
-	_, err := goTemplate.Parse(`{{define "field"}}{{.Name|camelCase}} {{.Type|mapType}} ` + "`" + `thrift:"{{.Id}}{{if .Optional}}{{else}},required{{end}}" json:"{{.Name}}"` + "`" + `{{end}}` +
+	goTemplate = `{{define "field"}}{{.Name|camelCase}} {{.Type|mapType}} ` + "`" + `thrift:"{{.Id}}{{if .Optional}}{{else}},required{{end}}" json:"{{.Name}}"` + "`" + `{{end}}` +
 		`{{define "argumentList"}}{{range $i, $a := .}}{{if $i|first|not}}, {{end}}{{$a.Name|lowerCamelCase}} {{$a.Type|mapType}}{{end}}{{end}}` +
 		`{{range $name, $enum := .Enums}}
 type {{$name|camelCase}} int32
@@ -90,11 +76,8 @@ func (s *{{$svc.Name|camelCase}}Client) {{.Name|camelCase}}({{template "argument
 {{end}}
 	{{if .ReturnType}}return res.Value, err{{else}}return err{{end}}
 }{{end}}
-{{end}}`)
-	if err != nil {
-		panic(err)
-	}
-}
+{{end}}`
+)
 
 func camelCase(st string) string {
 	if strings.ToUpper(st) == st {
@@ -113,7 +96,7 @@ func lowerCamelCase(st string) string {
 	return camelCase(st)
 }
 
-func mapType(typ *parser.Type) string {
+func mapType(def *parser.Thrift, typ *parser.Type) string {
 	switch typ.Name {
 	case "byte", "bool", "string":
 		return typ.Name
@@ -128,26 +111,28 @@ func mapType(typ *parser.Type) string {
 	case "double":
 		return "float64"
 	case "list":
-		return "[]" + mapType(typ.ValueType)
+		return "[]" + mapType(def, typ.ValueType)
 	case "map":
-		keyType := mapType(typ.KeyType)
+		keyType := mapType(def, typ.KeyType)
 		if keyType == "[]byte" {
 			// TODO: Log, warn, do something besides println!
 			println("key type of []byte not supported for maps")
 			keyType = "string"
 		}
-		return "map[" + keyType + "]" + mapType(typ.ValueType)
+		return "map[" + keyType + "]" + mapType(def, typ.ValueType)
 	}
-	// TODO: Enums as non-pointers
+	if e := def.Enums[typ.Name]; e != nil {
+		return typ.Name
+	}
 	// TODO: References to types in includes
 	return "*" + typ.Name
 }
 
-func returnType(typ *parser.Type) string {
+func returnType(def *parser.Thrift, typ *parser.Type) string {
 	if typ == nil || typ.Name == "void" {
 		return "error"
 	}
-	return fmt.Sprintf("(%s, error)", mapType(typ))
+	return fmt.Sprintf("(%s, error)", mapType(def, typ))
 }
 
 func main() {
@@ -193,7 +178,21 @@ func main() {
 	}
 	out.WriteString(")\n")
 
-	err = goTemplate.Execute(out, th)
+	funcMap := map[string]interface{}{
+		"camelCase":      camelCase,
+		"lowerCamelCase": lowerCamelCase,
+		"mapType":        func(typ *parser.Type) string { return mapType(th, typ) },
+		"returnType":     func(typ *parser.Type) string { return returnType(th, typ) },
+		"first":          func(i int) bool { return i == 1 },
+	}
+
+	tmpl := template.New("go")
+	tmpl.Funcs(funcMap)
+	_, err = tmpl.Parse(goTemplate)
+	if err != nil {
+		panic(err)
+	}
+	err = tmpl.Execute(out, th)
 	if err != nil {
 		panic(err)
 	}
