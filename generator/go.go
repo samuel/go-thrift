@@ -1,5 +1,8 @@
 package main
 
+// TODO:
+// - Default arguments. Possibly don't bother...
+
 import (
 	"flag"
 	"fmt"
@@ -97,6 +100,15 @@ func (g *GoGenerator) FormatReturnType(typ *parser.Type) string {
 		return "error"
 	}
 	return fmt.Sprintf("(%s, error)", g.FormatType(typ))
+}
+
+func (g *GoGenerator) WriteConstant(out io.Writer, c *parser.Constant) error {
+	if _, err := io.WriteString(out,
+		fmt.Sprintf("\nconst %s = %+v\n",
+			camelCase(c.Name), c.Value)); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (g *GoGenerator) WriteEnum(out io.Writer, enum *parser.Enum) error {
@@ -333,7 +345,6 @@ func (g *GoGenerator) Generate(name string, out io.Writer) error {
 	}
 
 	// Imports
-
 	imports := []string{"fmt"}
 	if _, err := io.WriteString(out, "\nimport (\n"); err != nil {
 		return err
@@ -345,6 +356,14 @@ func (g *GoGenerator) Generate(name string, out io.Writer) error {
 	}
 	if _, err := io.WriteString(out, "\n)\n"); err != nil {
 		return err
+	}
+
+	//
+
+	for _, c := range g.Thrift.Constants {
+		if err := g.WriteConstant(out, c); err != nil {
+			return err
+		}
 	}
 
 	for _, enum := range g.Thrift.Enums {

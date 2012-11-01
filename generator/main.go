@@ -1,9 +1,9 @@
 package main
 
 import (
-	"bytes"
 	"flag"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/samuel/go-thrift"
@@ -30,18 +30,35 @@ func lowerCamelCase(st string) string {
 func main() {
 	flag.Parse()
 
+	if flag.NArg() < 2 {
+		fmt.Fprintf(os.Stderr, "Usage of %s: [options] inputfile outputfile\n", os.Args[0])
+		flag.PrintDefaults()
+		os.Exit(1)
+	}
+
 	filename := flag.Arg(0)
+	outfilename := flag.Arg(1)
+
+	out := os.Stdout
+	if outfilename != "-" {
+		var err error
+		out, err = os.OpenFile(outfilename, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0644)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "%s\n", err.Error())
+			os.Exit(2)
+		}
+	}
 
 	p := &parser.Parser{}
 	th, err := p.ParseFile(filename)
 	if e, ok := err.(*parser.ErrSyntaxError); ok {
 		fmt.Printf("%s\n", e.Left)
-		panic(err)
+		fmt.Fprintf(os.Stderr, "%s\n", err.Error())
+		os.Exit(2)
 	} else if err != nil {
-		panic(err)
+		fmt.Fprintf(os.Stderr, "%s\n", err.Error())
+		os.Exit(2)
 	}
-
-	out := &bytes.Buffer{}
 
 	fp := strings.Split(filename, "/")
 	name := strings.Split(fp[len(fp)-1], ".")[0]
@@ -49,8 +66,11 @@ func main() {
 	generator := &GoGenerator{th.MergeIncludes()}
 	err = generator.Generate(name, out)
 	if err != nil {
-		panic(err)
+		fmt.Fprintf(os.Stderr, "%s\n", err.Error())
+		os.Exit(2)
 	}
 
-	fmt.Println(out.String())
+	if outfilename != "-" {
+		out.Close()
+	}
 }
