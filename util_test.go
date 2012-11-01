@@ -51,15 +51,15 @@ func TestCamelCase(t *testing.T) {
 		"TESTing":         "TESTing",
 	}
 	for k, v := range cases {
-		if camelCase(k) != v {
-			t.Fatalf("%s did not properly camelCase: %s", k, camelCase(k))
+		if CamelCase(k) != v {
+			t.Fatalf("%s did not properly CamelCase: %s", k, CamelCase(k))
 		}
 	}
 }
 
 func BenchmarkCamelCase(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		camelCase("foo_bar")
+		CamelCase("foo_bar")
 	}
 }
 

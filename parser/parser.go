@@ -411,7 +411,7 @@ func (p *Parser) outputToThrift(obj parsec.Output) (*Thrift, error) {
 		val := sym.value.([]interface{})
 		switch sym.symbol {
 		case "namespace":
-			thrift.Namespaces[val[0].(string)] = val[1].(string)
+			thrift.Namespaces[strings.ToLower(val[0].(string))] = val[1].(string)
 		case "typedef":
 			thrift.Typedefs[val[1].(string)] = parseType(val[0])
 		case "const":

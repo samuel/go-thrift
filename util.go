@@ -5,7 +5,7 @@ import (
 	"unicode"
 )
 
-func camelCase(s string) string {
+func CamelCase(s string) string {
 	prev := '_'
 	return strings.Map(
 		func(r rune) rune {
