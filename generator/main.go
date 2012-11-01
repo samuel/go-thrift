@@ -11,52 +11,23 @@ import (
 	"github.com/samuel/go-thrift/parser"
 )
 
-// go_thrift_type_map = {
-//     "byte": "TypeByte",
-//     "bool": "TypeBool",
-//     "i16": "TypeI16",
-//     "i32": "TypeI32",
-//     "i64": "TypeI64",
-//     "double": "TypeDouble",
-//     "string": "TypeString",
-//     "binary": "TypeBinary",
-// }
-
-// go_write_methods = {
-//     "byte": "WriteByte",
-//     "bool": "WriteBool",
-//     "i16": "WriteI16",
-//     "i32": "WriteI32",
-//     "i64": "WriteI64",
-//     "double": "WriteDouble",
-//     "string": "WriteString",
-//     "binary": "WriteBytes",
-// }
-
-// go_read_methods = {
-//     "byte": "ReadByte",
-//     "bool": "ReadBool",
-//     "i16": "ReadI16",
-//     "i32": "ReadI32",
-//     "i64": "ReadI64",
-//     "double": "ReadDouble",
-//     "string": "ReadString",
-//     "binary": "ReadBytes",
-// }
-
 var (
 	goTemplate *template.Template
 )
 
 func init() {
 	funcMap := map[string]interface{}{
-		"camelCase": camelCase,
-		"mapType":   mapType,
+		"camelCase":      camelCase,
+		"lowerCamelCase": lowerCamelCase,
+		"mapType":        mapType,
+		"returnType":     returnType,
+		"first":          func(i int) bool { return i == 1 },
 	}
 
 	goTemplate = template.New("go")
 	goTemplate.Funcs(funcMap)
-	goTemplate.Parse(`{{define "field"}}{{.Name|camelCase}} {{.Type|mapType}} ` + "`" + `thrift:"{{.Id}}{{if .Optional}}{{else}},required{{end}}"` + "`" + `{{end}}` +
+	_, err := goTemplate.Parse(`{{define "field"}}{{.Name|camelCase}} {{.Type|mapType}} ` + "`" + `thrift:"{{.Id}}{{if .Optional}}{{else}},required{{end}}" json:"{{.Name}}"` + "`" + `{{end}}` +
+		`{{define "argumentList"}}{{range $i, $a := .}}{{if $i|first|not}}, {{end}}{{$a.Name|lowerCamelCase}} {{$a.Type|mapType}}{{end}}{{end}}` +
 		`{{range $name, $enum := .Enums}}
 type {{$name|camelCase}} int32
 
@@ -80,13 +51,49 @@ type {{$name|camelCase}} struct {{"{"}}{{range .Fields}}
 }
 
 func (e *{{$name|camelCase}}) Error() string {
-	return fmt.Sprintf("{{$name|camelCase}}{TODO}")
+	return fmt.Sprintf("{{$name|camelCase}}{{"{"}}{{range $i, $f := .Fields}}{{if $i|first|not}}, {{end}}{{$f.Name|camelCase}}: %%+v{{end}}{{"}"}}"{{if .Fields}}, {{end}}{{range $i, $f := .Fields}}{{if $i|first|not}}, {{end}}e.{{$f.Name|camelCase}}{{end}})
 }
 {{end}}{{range $name, $svc := .Services}}
 type {{$name|camelCase}} interface {{"{"}}{{range .Methods}}
-	{{.Name|camelCase}}(...) ...{{end}}
+	{{.Name|camelCase}}({{template "argumentList" .Fields}}) {{.ReturnType|returnType}}{{end}}
+}{{range .Methods}}
+
+type {{$name|camelCase}}{{.Name|camelCase}}Request struct {{"{"}}{{range .Fields}}
+	{{template "field" .}}{{end}}
 }
+
+type {{$name|camelCase}}{{.Name|camelCase}}Response struct {{"{"}}{{if .ReturnType}}
+	Value {{.ReturnType|mapType}} ` + "`" + `thrift:"0" json:"value"` + "`" + `{{end}}{{range .Exceptions}}
+	{{.Name|camelCase}} {{.Type|mapType}} ` + "`" + `thrift:"{{.Id}}" json:"{{.Name}}"` + "`" + `{{end}}
+}{{end}}
+{{end}}{{if .Services}}
+type RPCClient interface {
+	Call(method string, request interface{}, response interface{}) error
+}
+{{end}}{{range $svc := .Services}}
+type {{$svc.Name|camelCase}}Client struct {
+	Client RPCClient
+}{{range $svc.Methods}}
+
+func (s *{{$svc.Name|camelCase}}Client) {{.Name|camelCase}}({{template "argumentList" .Fields}}) {{.ReturnType|returnType}} {
+	req := &{{$svc.Name|camelCase}}{{.Name|camelCase}}Request {{"{"}}{{range .Fields}}
+		{{.Name|camelCase}}: {{.Name|lowerCamelCase}},{{end}}
+	}
+	res := &{{$svc.Name|camelCase}}{{.Name|camelCase}}Response {}
+	err := s.Client.Call("{{.Name}}", req, res){{if .Exceptions}}
+	if err == nil {
+		switch {{"{"}}{{range .Exceptions}}
+		case res.{{.Name|camelCase}} != nil:
+			err = res.{{.Name|camelCase}}{{end}}
+		}
+	}
+{{end}}
+	{{if .ReturnType}}return res.Value, err{{else}}return err{{end}}
+}{{end}}
 {{end}}`)
+	if err != nil {
+		panic(err)
+	}
 }
 
 func camelCase(st string) string {
@@ -94,6 +101,16 @@ func camelCase(st string) string {
 		st = strings.ToLower(st)
 	}
 	return thrift.CamelCase(st)
+}
+
+func lowerCamelCase(st string) string {
+	// // Assume st is not unicode
+	// if strings.ToUpper(st) == st {
+	// 	return strings.ToLower(st)
+	// }
+	// st = thrift.CamelCase(st)
+	// return strings.ToLower(st[:1]) + st[1:]
+	return camelCase(st)
 }
 
 func mapType(typ *parser.Type) string {
@@ -124,6 +141,13 @@ func mapType(typ *parser.Type) string {
 	// TODO: Enums as non-pointers
 	// TODO: References to types in includes
 	return "*" + typ.Name
+}
+
+func returnType(typ *parser.Type) string {
+	if typ == nil || typ.Name == "void" {
+		return "error"
+	}
+	return fmt.Sprintf("(%s, error)", mapType(typ))
 }
 
 func main() {

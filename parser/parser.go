@@ -266,6 +266,9 @@ func parseType(t interface{}) *Type {
 	typ := &Type{}
 	switch t2 := t.(type) {
 	case string:
+		if t2 == "void" {
+			return nil
+		}
 		typ.Name = t2
 	case []interface{}:
 		typ.Name = t2[0].(string)
