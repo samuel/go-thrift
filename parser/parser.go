@@ -12,63 +12,6 @@ import (
 	"github.com/samuel/go-parse"
 )
 
-type Type struct {
-	Name      string
-	KeyType   *Type // If map
-	ValueType *Type // If map or list
-}
-
-type EnumValue struct {
-	Name  string
-	Value int
-}
-
-type Enum struct {
-	Name   string
-	Values map[string]*EnumValue
-}
-
-type Constant struct {
-	Type  *Type
-	Value interface{}
-}
-
-type Field struct {
-	Id       int
-	Name     string
-	Optional bool
-	Type     *Type
-	Default  interface{}
-}
-
-type Struct struct {
-	Name   string
-	Fields map[int]*Field
-}
-
-type Method struct {
-	Name       string
-	ReturnType *Type
-	Fields     map[int]*Field
-	Exceptions map[int]*Field
-}
-
-type Service struct {
-	Name    string
-	Methods map[string]*Method
-}
-
-type Thrift struct {
-	Includes   map[string]*Thrift
-	Typedefs   map[string]*Type
-	Namespaces map[string]string
-	Constants  map[string]*Constant
-	Enums      map[string]*Enum
-	Structs    map[string]*Struct
-	Exceptions map[string]*Struct
-	Services   map[string]*Service
-}
-
 type Filesystem interface {
 	Open(filename string) (io.ReadCloser, error)
 }
@@ -111,7 +54,7 @@ var (
 			}),
 		ReservedNames: []parsec.Output{
 			"namespace", "struct", "enum", "const", "service", "throws",
-			"required", "optional", "exception", "list", "map",
+			"required", "optional", "exception", "list", "map", "set",
 		},
 	}
 	simpleParser = buildParser()
@@ -275,7 +218,7 @@ func parseType(t interface{}) *Type {
 		if typ.Name == "map" {
 			typ.KeyType = parseType(t2[2])
 			typ.ValueType = parseType(t2[4])
-		} else if typ.Name == "list" {
+		} else if typ.Name == "list" || typ.Name == "set" {
 			typ.ValueType = parseType(t2[2])
 		} else {
 			panic("Basic type should never not be map or list: " + typ.Name)
@@ -286,9 +229,9 @@ func parseType(t interface{}) *Type {
 	return typ
 }
 
-func parseFields(fi []interface{}) map[int]*Field {
-	fields := make(map[int]*Field)
-	for _, f := range fi {
+func parseFields(fi []interface{}) []*Field {
+	fields := make([]*Field, len(fi))
+	for i, f := range fi {
 		parts := f.([]interface{})
 		field := &Field{}
 		field.Id = int(parts[0].(int64))
@@ -296,7 +239,7 @@ func parseFields(fi []interface{}) map[int]*Field {
 		field.Type = parseType(parts[3])
 		field.Name = parts[4].(string)
 		field.Default = parts[5]
-		fields[field.Id] = field
+		fields[i] = field
 	}
 	return fields
 }
@@ -313,10 +256,14 @@ func buildParser() parsec.Parser {
 	}
 	typeDef = parsec.Any(
 		parsec.Identifier(),
-		parsec.Try(parsec.Collect(parsec.Symbol("list"),
+		parsec.Collect(parsec.Symbol("list"),
 			parsec.Symbol("<"),
 			recurseTypeDef,
-			parsec.Symbol(">"))),
+			parsec.Symbol(">")),
+		parsec.Collect(parsec.Symbol("set"),
+			parsec.Symbol("<"),
+			recurseTypeDef,
+			parsec.Symbol(">")),
 		parsec.Collect(parsec.Symbol("map"),
 			parsec.Symbol("<"),
 			recurseTypeDef,
@@ -418,7 +365,7 @@ func (p *Parser) outputToThrift(obj parsec.Output) (*Thrift, error) {
 		case "typedef":
 			thrift.Typedefs[val[1].(string)] = parseType(val[0])
 		case "const":
-			thrift.Constants[val[1].(string)] = &Constant{&Type{Name: val[0].(string)}, val[3]}
+			thrift.Constants[val[1].(string)] = &Constant{val[1].(string), &Type{Name: val[0].(string)}, val[3]}
 		case "enum":
 			// enum: [ConsistencyLevel { [[ONE 1] [QUORUM 2] [LOCAL_QUORUM 3] [EACH_QUORUM 4] [ALL 5] [ANY 6] [TWO 7] [THREE 8]] }]
 			en := &Enum{
@@ -458,16 +405,19 @@ func (p *Parser) outputToThrift(obj parsec.Output) (*Thrift, error) {
 			}
 			for _, m := range val[2].([]interface{}) {
 				parts := m.([]interface{})
-				var exc map[int]*Field = nil
+				var exc []*Field = nil
 				if parts[5] != nil {
 					exc = parseFields((parts[5].([]interface{}))[2].([]interface{}))
 				} else {
-					exc = make(map[int]*Field)
+					exc = make([]*Field, 0)
+				}
+				for _, f := range exc {
+					f.Optional = true
 				}
 				method := &Method{
 					Name:       parts[1].(string),
 					ReturnType: parseType(parts[0]),
-					Fields:     parseFields(parts[3].([]interface{})),
+					Arguments:  parseFields(parts[3].([]interface{})),
 					Exceptions: exc,
 				}
 				s.Methods[method.Name] = method
