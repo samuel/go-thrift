@@ -13,9 +13,10 @@ import (
 )
 
 var (
-	f_go_binarystring = flag.Bool("go.binarystring", false, "Always use string for binary instead of []byte")
-	f_go_packagename  = flag.String("go.packagename", "", "Override the package name")
-	f_go_pointers     = flag.Bool("go.pointers", false, "Make all fields pointers")
+	f_go_binarystring  = flag.Bool("go.binarystring", false, "Always use string for binary instead of []byte")
+	f_go_json_enumname = flag.Bool("go.json.enumname", false, "For JSON marshal enums by name instead of value")
+	f_go_packagename   = flag.String("go.packagename", "", "Override the package name")
+	f_go_pointers      = flag.Bool("go.pointers", false, "Make all fields pointers")
 )
 
 type GoGenerator struct {
@@ -136,10 +137,11 @@ func (g *GoGenerator) WriteEnum(out io.Writer, enum *parser.Enum) error {
 		return err
 	}
 	for name, _ := range enum.Values {
+		realName := enum.Name + "." + name
 		fullName := enumName + camelCase(name)
 		if _, err := io.WriteString(out,
 			fmt.Sprintf(
-				"\t\t\"%s\": %s,\n", fullName, fullName)); err != nil {
+				"\t\t\"%s\": %s,\n", realName, fullName)); err != nil {
 			return err
 		}
 	}
@@ -152,10 +154,11 @@ func (g *GoGenerator) WriteEnum(out io.Writer, enum *parser.Enum) error {
 		return err
 	}
 	for name, _ := range enum.Values {
+		realName := enum.Name + "." + name
 		fullName := enumName + camelCase(name)
 		if _, err := io.WriteString(out,
 			fmt.Sprintf(
-				"\t\t%s: \"%s\",\n", fullName, fullName)); err != nil {
+				"\t\t%s: \"%s\",\n", fullName, realName)); err != nil {
 			return err
 		}
 	}
@@ -168,7 +171,7 @@ func (g *GoGenerator) WriteEnum(out io.Writer, enum *parser.Enum) error {
 		return err
 	}
 
-	_, err := io.WriteString(out,
+	if _, err := io.WriteString(out,
 		fmt.Sprintf(`
 func (e %s) String() string {
 	name := %sByValue[e]
@@ -177,8 +180,42 @@ func (e %s) String() string {
 	}
 	return name
 }
-`, enumName, enumName, enumName))
+`, enumName, enumName, enumName)); err != nil {
+		return err
+	}
+
+	if *f_go_json_enumname {
+		if _, err := io.WriteString(out,
+			fmt.Sprintf(`
+func (e %s) MarshalJSON() ([]byte, error) {
+	name := %sByValue[e]
+	if name == "" {
+		name = strconv.Itoa(int(e))
+	}
+	return []byte("\""+name+"\""), nil
+}
+`, enumName, enumName)); err != nil {
+			return err
+		}
+	}
+
+	if _, err := io.WriteString(out,
+		fmt.Sprintf(`
+func (e *%s) UnmarshalJSON(b []byte) error {
+	st := string(b)
+	if st[0] == '"' {
+		*e = %s(%sByName[st[1:len(st)-1]])
+		return nil
+	}
+	i, err := strconv.Atoi(st)
+	*e = %s(i)
 	return err
+}
+`, enumName, enumName, enumName, enumName)); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (g *GoGenerator) WriteStruct(out io.Writer, st *parser.Struct) error {
@@ -368,7 +405,7 @@ func (g *GoGenerator) Generate(name string, out io.Writer) error {
 	}
 
 	// Imports
-	imports := []string{"fmt"}
+	imports := []string{"fmt", "strconv"}
 	if _, err := io.WriteString(out, "\nimport (\n"); err != nil {
 		return err
 	}
