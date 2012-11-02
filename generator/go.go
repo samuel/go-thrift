@@ -121,6 +121,7 @@ func (g *GoGenerator) WriteEnum(out io.Writer, enum *parser.Enum) error {
 	if _, err := io.WriteString(out, "\nvar (\n"); err != nil {
 		return err
 	}
+
 	for name, val := range enum.Values {
 		if _, err := io.WriteString(out,
 			fmt.Sprintf(
@@ -129,32 +130,54 @@ func (g *GoGenerator) WriteEnum(out io.Writer, enum *parser.Enum) error {
 			return err
 		}
 	}
-	if _, err := io.WriteString(out, ")\n"); err != nil {
-		return err
-	}
 
-	if _, err := io.WriteString(out, "\nfunc (e "+enumName+") String() string {\n"); err != nil {
+	// EnumByName
+	if _, err := io.WriteString(out, "\t"+enumName+"ByName = map[string]"+enumName+"{\n"); err != nil {
 		return err
 	}
-	if _, err := io.WriteString(out, "\tswitch e {\n"); err != nil {
-		return err
-	}
-	for name := range enum.Values {
-		name = camelCase(name)
+	for name, _ := range enum.Values {
+		fullName := enumName + camelCase(name)
 		if _, err := io.WriteString(out,
 			fmt.Sprintf(
-				"\tcase %s%s:\n\t\treturn \"%s%s\"\n",
-				enumName, name, enumName, name)); err != nil {
+				"\t\t\"%s\": %s,\n", fullName, fullName)); err != nil {
 			return err
 		}
 	}
 	if _, err := io.WriteString(out, "\t}\n"); err != nil {
 		return err
 	}
-	if _, err := io.WriteString(out, "\treturn fmt.Sprintf(\"Unknown value for "+enumName+": %d\", e)\n"); err != nil {
+
+	// EnumByValue
+	if _, err := io.WriteString(out, "\t"+enumName+"ByValue = map["+enumName+"]string{\n"); err != nil {
 		return err
 	}
-	_, err := io.WriteString(out, "}\n")
+	for name, _ := range enum.Values {
+		fullName := enumName + camelCase(name)
+		if _, err := io.WriteString(out,
+			fmt.Sprintf(
+				"\t\t%s: \"%s\",\n", fullName, fullName)); err != nil {
+			return err
+		}
+	}
+	if _, err := io.WriteString(out, "\t}\n"); err != nil {
+		return err
+	}
+
+	// end var
+	if _, err := io.WriteString(out, ")\n"); err != nil {
+		return err
+	}
+
+	_, err := io.WriteString(out,
+		fmt.Sprintf(`
+func (e %s) String() string {
+	name := %sByValue[e]
+	if name == "" {
+		name = fmt.Sprintf("Unknown enum value %s(%%d)", e)
+	}
+	return name
+}
+`, enumName, enumName, enumName))
 	return err
 }
 
