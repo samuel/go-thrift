@@ -27,6 +27,23 @@ func lowerCamelCase(st string) string {
 	return camelCase(st)
 }
 
+// Given a map with string keys, return a sorted list of keys.
+// If m is not a map or doesn't have string keys then return nil.
+func sortedKeys(m interface{}) []string {
+	value := reflect.ValueOf(m)
+	if value.Kind() != reflect.Map || value.Type().Key().Kind() != reflect.String {
+		return nil
+	}
+
+	valueKeys := value.MapKeys()
+	keys := make([]string, len(valueKeys))
+	for i, k := range valueKeys {
+		keys[i] = k.String()
+	}
+	sort.Strings(keys)
+	return keys
+}
+
 func main() {
 	flag.Parse()
 

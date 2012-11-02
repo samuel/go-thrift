@@ -7,6 +7,8 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"reflect"
+	"sort"
 	"strings"
 
 	"github.com/samuel/go-thrift/parser"
@@ -123,7 +125,10 @@ func (g *GoGenerator) WriteEnum(out io.Writer, enum *parser.Enum) error {
 		return err
 	}
 
-	for name, val := range enum.Values {
+	valueNames := sortedKeys(enum.Values)
+
+	for _, name := range valueNames {
+		val := enum.Values[name]
 		if _, err := io.WriteString(out,
 			fmt.Sprintf(
 				"\t%s%s = %s(%d)\n", enumName,
@@ -136,7 +141,7 @@ func (g *GoGenerator) WriteEnum(out io.Writer, enum *parser.Enum) error {
 	if _, err := io.WriteString(out, "\t"+enumName+"ByName = map[string]"+enumName+"{\n"); err != nil {
 		return err
 	}
-	for name, _ := range enum.Values {
+	for _, name := range valueNames {
 		realName := enum.Name + "." + name
 		fullName := enumName + camelCase(name)
 		if _, err := io.WriteString(out,
@@ -153,7 +158,7 @@ func (g *GoGenerator) WriteEnum(out io.Writer, enum *parser.Enum) error {
 	if _, err := io.WriteString(out, "\t"+enumName+"ByValue = map["+enumName+"]string{\n"); err != nil {
 		return err
 	}
-	for name, _ := range enum.Values {
+	for _, name := range valueNames {
 		realName := enum.Name + "." + name
 		fullName := enumName + camelCase(name)
 		if _, err := io.WriteString(out,
@@ -271,7 +276,9 @@ func (g *GoGenerator) WriteService(out io.Writer, svc *parser.Service) error {
 	if _, err := io.WriteString(out, "\ntype "+svcName+" interface {\n"); err != nil {
 		return err
 	}
-	for _, method := range svc.Methods {
+	methodNames := sortedKeys(svc.Methods)
+	for _, k := range methodNames {
+		method := svc.Methods[k]
 		if _, err := io.WriteString(out,
 			fmt.Sprintf(
 				"\t%s(%s) %s\n",
@@ -284,7 +291,8 @@ func (g *GoGenerator) WriteService(out io.Writer, svc *parser.Service) error {
 		return err
 	}
 
-	for _, method := range svc.Methods {
+	for _, k := range methodNames {
+		method := svc.Methods[k]
 		if err := g.WriteStruct(out, &parser.Struct{svcName + camelCase(method.Name) + "Request", method.Arguments}); err != nil {
 			return err
 		}
@@ -307,7 +315,8 @@ func (g *GoGenerator) WriteService(out io.Writer, svc *parser.Service) error {
 		return err
 	}
 
-	for _, method := range svc.Methods {
+	for _, k := range methodNames {
+		method := svc.Methods[k]
 		methodName := camelCase(method.Name)
 		if _, err := io.WriteString(out,
 			fmt.Sprintf("\nfunc (s *%sClient) %s(%s) %s {\n",
@@ -420,25 +429,29 @@ func (g *GoGenerator) Generate(name string, out io.Writer) error {
 
 	//
 
-	for _, c := range g.Thrift.Constants {
+	for _, k := range sortedKeys(g.Thrift.Constants) {
+		c := g.Thrift.Constants[k]
 		if err := g.WriteConstant(out, c); err != nil {
 			return err
 		}
 	}
 
-	for _, enum := range g.Thrift.Enums {
+	for _, k := range sortedKeys(g.Thrift.Enums) {
+		enum := g.Thrift.Enums[k]
 		if err := g.WriteEnum(out, enum); err != nil {
 			return err
 		}
 	}
 
-	for _, st := range g.Thrift.Structs {
+	for _, k := range sortedKeys(g.Thrift.Structs) {
+		st := g.Thrift.Structs[k]
 		if err := g.WriteStruct(out, st); err != nil {
 			return err
 		}
 	}
 
-	for _, ex := range g.Thrift.Exceptions {
+	for _, k := range sortedKeys(g.Thrift.Exceptions) {
+		ex := g.Thrift.Exceptions[k]
 		if err := g.WriteException(out, ex); err != nil {
 			return err
 		}
@@ -452,7 +465,8 @@ func (g *GoGenerator) Generate(name string, out io.Writer) error {
 		}
 	}
 
-	for _, svc := range g.Thrift.Services {
+	for _, k := range sortedKeys(g.Thrift.Services) {
+		svc := g.Thrift.Services[k]
 		if err := g.WriteService(out, svc); err != nil {
 			return err
 		}
