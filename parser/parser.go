@@ -367,7 +367,6 @@ func (p *Parser) outputToThrift(obj parsec.Output) (*Thrift, error) {
 		case "const":
 			thrift.Constants[val[1].(string)] = &Constant{val[1].(string), &Type{Name: val[0].(string)}, val[3]}
 		case "enum":
-			// enum: [ConsistencyLevel { [[ONE 1] [QUORUM 2] [LOCAL_QUORUM 3] [EACH_QUORUM 4] [ALL 5] [ANY 6] [TWO 7] [THREE 8]] }]
 			en := &Enum{
 				Name:   val[0].(string),
 				Values: make(map[string]*EnumValue),
