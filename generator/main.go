@@ -4,6 +4,8 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"reflect"
+	"sort"
 	"strings"
 
 	"github.com/samuel/go-thrift"

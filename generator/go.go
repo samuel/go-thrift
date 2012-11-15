@@ -7,8 +7,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"reflect"
-	"sort"
 	"strings"
 
 	"github.com/samuel/go-thrift/parser"
