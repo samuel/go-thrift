@@ -279,11 +279,13 @@ func buildParser() parsec.Parser {
 		parsec.Any(
 			parsec.All(parsec.Symbol("="), parsec.Lexeme(integer())),
 			nilParser(),
-		))
+		),
+		parsec.Any(parsec.Symbol(","), parsec.Symbol("")),
+	)
 	enumDef := parsec.Collect(
 		parsec.Identifier(),
 		parsec.Symbol("{"),
-		parsec.SepBy(parsec.Symbol(","), enumItemDef),
+		parsec.Many(enumItemDef),
 		parsec.Symbol("}"),
 	)
 	structFieldDef := parsec.Collect(
