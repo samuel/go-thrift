@@ -70,3 +70,19 @@ _Framed transport_ is supported by wrapping a value implementing
 The "parser" subdirectory contains a Thrift IDL parser, and "generator"
 contains a Go code generator. It could be extended to include other
 languages in the future.
+
+How to use the generator:
+
+    $ go install github.com/samuel/go-thrift/generator
+
+    $ generator --help
+    Usage of parsimony: [options] inputfile outputfile
+      -go.binarystring=false: Always use string for binary instead of []byte
+      -go.json.enumname=false: For JSON marshal enums by name instead of value
+      -go.packagename="": Override the package name
+      -go.pointers=false: Make all fields pointers
+
+    $ mkdir $GOPATH/src/cassandra
+    $ generator cassandra.thrift $GOPATH/cassandra/thrift.go
+
+    # Then can import "cassandra"

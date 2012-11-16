@@ -271,6 +271,8 @@ func (g *GoGenerator) WriteException(out io.Writer, ex *parser.Struct) error {
 func (g *GoGenerator) WriteService(out io.Writer, svc *parser.Service) error {
 	svcName := camelCase(svc.Name)
 
+	// Service interface
+
 	if _, err := io.WriteString(out, "\ntype "+svcName+" interface {\n"); err != nil {
 		return err
 	}
@@ -287,6 +289,41 @@ func (g *GoGenerator) WriteService(out io.Writer, svc *parser.Service) error {
 	}
 	if _, err := io.WriteString(out, "}\n"); err != nil {
 		return err
+	}
+
+	// Server
+
+	if _, err := io.WriteString(out, fmt.Sprintf("\ntype %sServer struct {\n\tImplementation %s\n}\n", svcName, svcName)); err != nil {
+		return err
+	}
+
+	// Server method wrappers
+
+	for _, k := range methodNames {
+		method := svc.Methods[k]
+		mName := camelCase(method.Name)
+		if _, err := io.WriteString(out, fmt.Sprintf("\nfunc (s *%sServer) %s(req *%s%sRequest, res *%s%sResponse) error {\n", svcName, mName, svcName, mName, svcName, mName)); err != nil {
+			return err
+		}
+		args := make([]string, 0)
+		for _, arg := range method.Arguments {
+			aName := camelCase(arg.Name)
+			args = append(args, "req."+aName)
+		}
+		if _, err := io.WriteString(out, fmt.Sprintf("\tval, err := s.Implementation.%s(%s)\n", mName, strings.Join(args, ", "))); err != nil {
+			return err
+		}
+		if _, err := io.WriteString(out, "\tswitch e := err.(type) {\n"); err != nil {
+			return err
+		}
+		for _, ex := range method.Exceptions {
+			if _, err := io.WriteString(out, fmt.Sprintf("\tcase %s:\n\t\tres.%s = e\n\t\terr = nil\n", g.FormatType(ex.Type), camelCase(ex.Name))); err != nil {
+				return err
+			}
+		}
+		if _, err := io.WriteString(out, "\t}\n\tres.Value = val\n\treturn err\n}\n"); err != nil {
+			return err
+		}
 	}
 
 	for _, k := range methodNames {
