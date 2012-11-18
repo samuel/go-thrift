@@ -449,7 +449,10 @@ func (g *GoGenerator) Generate(name string, out io.Writer) error {
 	}
 
 	// Imports
-	imports := []string{"fmt", "strconv"}
+	imports := []string{"fmt"}
+	if len(g.Thrift.Enums) > 0 {
+		imports = append(imports, "strconv")
+	}
 	if _, err := io.WriteString(out, "\nimport (\n"); err != nil {
 		return err
 	}
@@ -458,7 +461,7 @@ func (g *GoGenerator) Generate(name string, out io.Writer) error {
 			return err
 		}
 	}
-	if _, err := io.WriteString(out, "\n)\n"); err != nil {
+	if _, err := io.WriteString(out, ")\n"); err != nil {
 		return err
 	}
 
