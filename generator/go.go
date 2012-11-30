@@ -14,10 +14,10 @@ import (
 )
 
 var (
-	f_go_binarystring  = flag.Bool("go.binarystring", false, "Always use string for binary instead of []byte")
-	f_go_json_enumname = flag.Bool("go.json.enumname", false, "For JSON marshal enums by name instead of value")
-	f_go_packagename   = flag.String("go.packagename", "", "Override the package name")
-	f_go_pointers      = flag.Bool("go.pointers", false, "Make all fields pointers")
+	f_go_binarystring = flag.Bool("go.binarystring", false, "Always use string for binary instead of []byte")
+	f_go_json_enumnum = flag.Bool("go.json.enumnum", false, "For JSON marshal enums by number instead of name")
+	f_go_packagename  = flag.String("go.packagename", "", "Override the package name")
+	f_go_pointers     = flag.Bool("go.pointers", false, "Make all fields pointers")
 )
 
 var (
@@ -174,7 +174,7 @@ func (e %s) String() string {
 }
 `, enumName, enumName, enumName)
 
-	if *f_go_json_enumname {
+	if !*f_go_json_enumnum {
 		g.write(out, `
 func (e %s) MarshalJSON() ([]byte, error) {
 	name := %sByValue[e]
