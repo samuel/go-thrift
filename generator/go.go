@@ -20,6 +20,10 @@ var (
 	f_go_pointers      = flag.Bool("go.pointers", false, "Make all fields pointers")
 )
 
+var (
+	goNamespaceOrder = []string{"go", "perl", "py"}
+)
+
 type ErrUnknownType string
 
 func (e ErrUnknownType) Error() string {
@@ -356,18 +360,16 @@ func (g *GoGenerator) Generate(name string, out io.Writer) (err error) {
 
 	packageName := *f_go_packagename
 	if packageName == "" {
-		packageName = g.Thrift.Namespaces["go"]
-		if packageName == "" {
-			packageName = g.Thrift.Namespaces["perl"]
-			if packageName == "" {
-				packageName = g.Thrift.Namespaces["py"]
-				if packageName == "" {
-					packageName = name
-				} else {
-					parts := strings.Split(packageName, ".")
-					packageName = parts[len(parts)-1]
-				}
+		for _, k := range goNamespaceOrder {
+			packageName = g.Thrift.Namespaces[k]
+			if packageName != "" {
+				parts := strings.Split(packageName, ".")
+				packageName = parts[len(parts)-1]
+				break
 			}
+		}
+		if packageName == "" {
+			packageName = name
 		}
 	}
 	packageName = strings.ToLower(packageName)
