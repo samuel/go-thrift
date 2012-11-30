@@ -310,7 +310,12 @@ func (g *GoGenerator) WriteService(out io.Writer, svc *parser.Service) error {
 			aName := camelCase(arg.Name)
 			args = append(args, "req."+aName)
 		}
-		if _, err := io.WriteString(out, fmt.Sprintf("\tval, err := s.Implementation.%s(%s)\n", mName, strings.Join(args, ", "))); err != nil {
+		isVoid := method.ReturnType == nil || method.ReturnType.Name == "void"
+		val := ""
+		if !isVoid {
+			val = "val, "
+		}
+		if _, err := io.WriteString(out, fmt.Sprintf("\t%serr := s.Implementation.%s(%s)\n", val, mName, strings.Join(args, ", "))); err != nil {
 			return err
 		}
 		if _, err := io.WriteString(out, "\tswitch e := err.(type) {\n"); err != nil {
@@ -321,7 +326,15 @@ func (g *GoGenerator) WriteService(out io.Writer, svc *parser.Service) error {
 				return err
 			}
 		}
-		if _, err := io.WriteString(out, "\t}\n\tres.Value = val\n\treturn err\n}\n"); err != nil {
+		if _, err := io.WriteString(out, "\t}\n"); err != nil {
+			return err
+		}
+		if !isVoid {
+			if _, err := io.WriteString(out, "\tres.Value = val\n"); err != nil {
+				return err
+			}
+		}
+		if _, err := io.WriteString(out, "\treturn err\n}\n"); err != nil {
 			return err
 		}
 	}
