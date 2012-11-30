@@ -42,7 +42,7 @@ func (g *GoGenerator) write(w io.Writer, f string, a ...interface{}) error {
 	return nil
 }
 
-func (g *GoGenerator) FormatType(typ *parser.Type) string {
+func (g *GoGenerator) formatType(typ *parser.Type) string {
 	ptr := ""
 	if *f_go_pointers {
 		ptr = "*"
@@ -64,25 +64,25 @@ func (g *GoGenerator) FormatType(typ *parser.Type) string {
 	case "double":
 		return ptr + "float64"
 	case "set":
-		valueType := g.FormatType(typ.ValueType)
+		valueType := g.formatType(typ.ValueType)
 		if valueType == "[]byte" {
 			valueType = "string"
 		}
 		return "map[" + valueType + "]interface{}"
 	case "list":
-		return "[]" + g.FormatType(typ.ValueType)
+		return "[]" + g.formatType(typ.ValueType)
 	case "map":
-		keyType := g.FormatType(typ.KeyType)
+		keyType := g.formatType(typ.KeyType)
 		if keyType == "[]byte" {
 			// TODO: Log, warn, do something!
 			// println("key type of []byte not supported for maps")
 			keyType = "string"
 		}
-		return "map[" + keyType + "]" + g.FormatType(typ.ValueType)
+		return "map[" + keyType + "]" + g.formatType(typ.ValueType)
 	}
 
 	if t := g.Thrift.Typedefs[typ.Name]; t != nil {
-		return g.FormatType(t)
+		return g.formatType(t)
 	}
 	if e := g.Thrift.Enums[typ.Name]; e != nil {
 		return ptr + e.Name
@@ -94,39 +94,40 @@ func (g *GoGenerator) FormatType(typ *parser.Type) string {
 		return "*" + e.Name
 	}
 
-	panic(ErrUnknownType(typ.Name))
+	g.error(ErrUnknownType(typ.Name))
+	return ""
 }
 
-func (g *GoGenerator) FormatField(field *parser.Field) string {
+func (g *GoGenerator) formatField(field *parser.Field) string {
 	tags := ""
 	if !field.Optional {
 		tags = ",required"
 	}
 	return fmt.Sprintf(
 		"%s %s `thrift:\"%d%s\" json:\"%s\"`",
-		camelCase(field.Name), g.FormatType(field.Type), field.Id, tags, field.Name)
+		camelCase(field.Name), g.formatType(field.Type), field.Id, tags, field.Name)
 }
 
-func (g *GoGenerator) FormatArguments(arguments []*parser.Field) string {
+func (g *GoGenerator) formatArguments(arguments []*parser.Field) string {
 	args := make([]string, len(arguments))
 	for i, arg := range arguments {
-		args[i] = fmt.Sprintf("%s %s", camelCase(arg.Name), g.FormatType(arg.Type))
+		args[i] = fmt.Sprintf("%s %s", camelCase(arg.Name), g.formatType(arg.Type))
 	}
 	return strings.Join(args, ", ")
 }
 
-func (g *GoGenerator) FormatReturnType(typ *parser.Type) string {
+func (g *GoGenerator) formatReturnType(typ *parser.Type) string {
 	if typ == nil || typ.Name == "void" {
 		return "error"
 	}
-	return fmt.Sprintf("(%s, error)", g.FormatType(typ))
+	return fmt.Sprintf("(%s, error)", g.formatType(typ))
 }
 
-func (g *GoGenerator) WriteConstant(out io.Writer, c *parser.Constant) error {
+func (g *GoGenerator) writeConstant(out io.Writer, c *parser.Constant) error {
 	return g.write(out, "\nconst %s = %+v\n", camelCase(c.Name), c.Value)
 }
 
-func (g *GoGenerator) WriteEnum(out io.Writer, enum *parser.Enum) error {
+func (g *GoGenerator) writeEnum(out io.Writer, enum *parser.Enum) error {
 	enumName := camelCase(enum.Name)
 
 	g.write(out, "\ntype %s int32\n\nvar(\n", enumName)
@@ -197,18 +198,18 @@ func (e *%s) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
-func (g *GoGenerator) WriteStruct(out io.Writer, st *parser.Struct) error {
+func (g *GoGenerator) writeStruct(out io.Writer, st *parser.Struct) error {
 	structName := camelCase(st.Name)
 
 	g.write(out, "\ntype %s struct {\n", structName)
 	for _, field := range st.Fields {
-		g.write(out, "\t%s\n", g.FormatField(field))
+		g.write(out, "\t%s\n", g.formatField(field))
 	}
 	return g.write(out, "}\n")
 }
 
-func (g *GoGenerator) WriteException(out io.Writer, ex *parser.Struct) error {
-	if err := g.WriteStruct(out, ex); err != nil {
+func (g *GoGenerator) writeException(out io.Writer, ex *parser.Struct) error {
+	if err := g.writeStruct(out, ex); err != nil {
 		return err
 	}
 
@@ -230,7 +231,7 @@ func (g *GoGenerator) WriteException(out io.Writer, ex *parser.Struct) error {
 	return g.write(out, "}\n")
 }
 
-func (g *GoGenerator) WriteService(out io.Writer, svc *parser.Service) error {
+func (g *GoGenerator) writeService(out io.Writer, svc *parser.Service) error {
 	svcName := camelCase(svc.Name)
 
 	// Service interface
@@ -241,8 +242,8 @@ func (g *GoGenerator) WriteService(out io.Writer, svc *parser.Service) error {
 		method := svc.Methods[k]
 		g.write(out,
 			"\t%s(%s) %s\n",
-			camelCase(method.Name), g.FormatArguments(method.Arguments),
-			g.FormatReturnType(method.ReturnType))
+			camelCase(method.Name), g.formatArguments(method.Arguments),
+			g.formatReturnType(method.ReturnType))
 	}
 	g.write(out, "}\n")
 
@@ -269,7 +270,7 @@ func (g *GoGenerator) WriteService(out io.Writer, svc *parser.Service) error {
 		g.write(out, "\t%serr := s.Implementation.%s(%s)\n", val, mName, strings.Join(args, ", "))
 		g.write(out, "\tswitch e := err.(type) {\n")
 		for _, ex := range method.Exceptions {
-			g.write(out, "\tcase %s:\n\t\tres.%s = e\n\t\terr = nil\n", g.FormatType(ex.Type), camelCase(ex.Name))
+			g.write(out, "\tcase %s:\n\t\tres.%s = e\n\t\terr = nil\n", g.formatType(ex.Type), camelCase(ex.Name))
 		}
 		g.write(out, "\t}\n")
 		if !isVoid {
@@ -280,7 +281,7 @@ func (g *GoGenerator) WriteService(out io.Writer, svc *parser.Service) error {
 
 	for _, k := range methodNames {
 		method := svc.Methods[k]
-		if err := g.WriteStruct(out, &parser.Struct{svcName + camelCase(method.Name) + "Request", method.Arguments}); err != nil {
+		if err := g.writeStruct(out, &parser.Struct{svcName + camelCase(method.Name) + "Request", method.Arguments}); err != nil {
 			return err
 		}
 
@@ -293,7 +294,7 @@ func (g *GoGenerator) WriteService(out io.Writer, svc *parser.Service) error {
 		}
 
 		res := &parser.Struct{svcName + camelCase(method.Name) + "Response", args}
-		if err := g.WriteStruct(out, res); err != nil {
+		if err := g.writeStruct(out, res); err != nil {
 			return err
 		}
 	}
@@ -305,8 +306,8 @@ func (g *GoGenerator) WriteService(out io.Writer, svc *parser.Service) error {
 		methodName := camelCase(method.Name)
 		g.write(out, "\nfunc (s *%sClient) %s(%s) %s {\n",
 			svcName, methodName,
-			g.FormatArguments(method.Arguments),
-			g.FormatReturnType(method.ReturnType))
+			g.formatArguments(method.Arguments),
+			g.formatReturnType(method.ReturnType))
 
 		// Request
 		g.write(out, "\treq := &%s%sRequest{\n", svcName, methodName)
@@ -389,28 +390,28 @@ func (g *GoGenerator) Generate(name string, out io.Writer) (err error) {
 
 	for _, k := range sortedKeys(g.Thrift.Constants) {
 		c := g.Thrift.Constants[k]
-		if err := g.WriteConstant(out, c); err != nil {
+		if err := g.writeConstant(out, c); err != nil {
 			return err
 		}
 	}
 
 	for _, k := range sortedKeys(g.Thrift.Enums) {
 		enum := g.Thrift.Enums[k]
-		if err := g.WriteEnum(out, enum); err != nil {
+		if err := g.writeEnum(out, enum); err != nil {
 			return err
 		}
 	}
 
 	for _, k := range sortedKeys(g.Thrift.Structs) {
 		st := g.Thrift.Structs[k]
-		if err := g.WriteStruct(out, st); err != nil {
+		if err := g.writeStruct(out, st); err != nil {
 			return err
 		}
 	}
 
 	for _, k := range sortedKeys(g.Thrift.Exceptions) {
 		ex := g.Thrift.Exceptions[k]
-		if err := g.WriteException(out, ex); err != nil {
+		if err := g.writeException(out, ex); err != nil {
 			return err
 		}
 	}
@@ -423,7 +424,7 @@ func (g *GoGenerator) Generate(name string, out io.Writer) (err error) {
 
 	for _, k := range sortedKeys(g.Thrift.Services) {
 		svc := g.Thrift.Services[k]
-		if err := g.WriteService(out, svc); err != nil {
+		if err := g.writeService(out, svc); err != nil {
 			return err
 		}
 	}
