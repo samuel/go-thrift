@@ -3,6 +3,11 @@ Thrift Package for Go
 
 API Documentation: <http://go.pkgdoc.org/github.com/samuel/go-thrift>
 
+License
+-------
+
+3-clause BSD. See LICENSE file.
+
 Overview
 --------
 
