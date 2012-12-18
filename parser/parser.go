@@ -13,7 +13,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/samuel/go-parse"
+	"github.com/samuel/go-parser"
 )
 
 type Filesystem interface {
@@ -40,23 +40,23 @@ func (e *ErrSyntaxError) Error() string {
 var (
 	ErrParserFail = errors.New("Parsing failed entirely")
 
-	spec = parsec.Spec{
+	spec = parser.Spec{
 		CommentStart:   "/*",
 		CommentEnd:     "*/",
-		CommentLine:    parsec.Any(parsec.String("#"), parsec.String("//")),
+		CommentLine:    parser.Any(parser.String("#"), parser.String("//")),
 		NestedComments: true,
-		IdentStart: parsec.Satisfy(
+		IdentStart: parser.Satisfy(
 			func(c rune) bool {
 				return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '_'
 			}),
-		IdentLetter: parsec.Satisfy(
+		IdentLetter: parser.Satisfy(
 			func(c rune) bool {
 				return (c >= 'A' && c <= 'Z') ||
 					(c >= 'a' && c <= 'z') ||
 					(c >= '0' && c <= '9') ||
 					c == '.' || c == '_'
 			}),
-		ReservedNames: []parsec.Output{
+		ReservedNames: []string{
 			"namespace", "struct", "enum", "const", "service", "throws",
 			"required", "optional", "exception", "list", "map", "set",
 		},
@@ -64,24 +64,24 @@ var (
 	simpleParser = buildParser()
 )
 
-func quotedString() parsec.Parser {
-	return func(in parsec.Vessel) (parsec.Output, bool) {
-		next, ok := in.Next()
-		if !ok || next != '"' {
-			return nil, false
+func quotedString() parser.Parser {
+	return func(st *parser.State) (parser.Output, bool, error) {
+		next, err := st.Input.Next()
+		if err != nil || next != '"' {
+			return nil, false, err
 		}
 
-		in.Pop(1)
+		st.Input.Pop(1)
 
 		escaped := false
 		runes := make([]rune, 1, 8)
 		runes[0] = '"'
 		for {
-			next, ok := in.Next()
-			if !ok {
-				return nil, false
+			next, err := st.Input.Next()
+			if err != nil {
+				return nil, false, err
 			}
-			in.Pop(1)
+			st.Input.Pop(1)
 			if escaped {
 				switch next {
 				case 'n':
@@ -106,61 +106,65 @@ func quotedString() parsec.Parser {
 			}
 		}
 
-		return string(runes), true
+		return string(runes), true, nil
 	}
 }
 
-func integer() parsec.Parser {
-	return func(in parsec.Vessel) (parsec.Output, bool) {
-		next, ok := in.Next()
-		if !ok || ((next < '0' || next > '9') && next != '-') {
-			return nil, false
+func integer() parser.Parser {
+	return func(st *parser.State) (parser.Output, bool, error) {
+		next, err := st.Input.Next()
+		if err != nil || ((next < '0' || next > '9') && next != '-') {
+			return nil, false, err
 		}
 
-		in.Pop(1)
+		st.Input.Pop(1)
 
 		runes := make([]rune, 1, 8)
 		runes[0] = next
 		for {
-			next, ok := in.Next()
-			if !ok || !(next >= '0' && next <= '9') {
+			next, err := st.Input.Next()
+			if err == io.EOF || !(next >= '0' && next <= '9') {
 				break
+			} else if err != nil {
+				return nil, false, err
 			}
-			in.Pop(1)
+			st.Input.Pop(1)
 			runes = append(runes, next)
 		}
 
 		// We're guaranteed to only have integers here so don't check the error
 		i64, _ := strconv.ParseInt(string(runes), 10, 64)
-		return i64, true
+		return i64, true, nil
 	}
 }
 
-func float() parsec.Parser {
-	return func(in parsec.Vessel) (parsec.Output, bool) {
-		next, ok := in.Next()
-		if !ok || ((next < '0' || next > '9') && next != '-') {
-			return nil, false
+func float() parser.Parser {
+	return func(st *parser.State) (parser.Output, bool, error) {
+		next, err := st.Input.Next()
+		if err != nil || ((next < '0' || next > '9') && next != '-') {
+			return nil, false, err
 		}
 
-		in.Pop(1)
+		st.Input.Pop(1)
 
 		runes := make([]rune, 1, 8)
 		runes[0] = next
 		for {
-			next, ok := in.Next()
-			if !ok || !((next >= '0' && next <= '9') || next == '.') {
+			next, err := st.Input.Next()
+			if err == io.EOF || !((next >= '0' && next <= '9') || next == '.') {
 				break
+			} else {
+				return nil, false, err
 			}
-			in.Pop(1)
+			st.Input.Pop(1)
 			runes = append(runes, next)
 		}
 
 		f64, err := strconv.ParseFloat(string(runes), 64)
 		if err != nil {
-			return nil, false
+			return nil, false, nil
 		}
-		return f64, true
+		return f64, true, nil
 	}
 }
 
@@ -169,43 +173,45 @@ type symbolValue struct {
 	value  interface{}
 }
 
-func symbolDispatcher(table map[string]parsec.Parser) parsec.Parser {
-	ws := parsec.Whitespace()
-	return func(in parsec.Vessel) (parsec.Output, bool) {
-		next, ok := in.Next()
-		if !ok || !(next >= 'a' && next <= 'z') {
-			return nil, false
+func symbolDispatcher(table map[string]parser.Parser) parser.Parser {
+	ws := parser.Whitespace()
+	return func(st *parser.State) (parser.Output, bool, error) {
+		next, err := st.Input.Next()
+		if err != nil || !(next >= 'a' && next <= 'z') {
+			return nil, false, err
 		}
-		in.Pop(1)
+		st.Input.Pop(1)
 
 		runes := make([]rune, 1, 8)
 		runes[0] = next
 		for {
-			next, ok := in.Next()
-			if !ok || next == ' ' {
+			next, err := st.Input.Next()
+			if err == io.EOF || next == ' ' {
 				break
+			} else if err != nil {
+				return nil, false, err
 			}
-			in.Pop(1)
+			st.Input.Pop(1)
 			runes = append(runes, next)
 		}
 
 		sym := string(runes)
 		par := table[sym]
 		if par == nil {
-			return nil, false
+			return nil, false, nil
 		}
-		_, ok = ws(in)
-		if !ok {
-			return nil, false
+		_, ok, err := ws(st)
+		if !ok || err != nil {
+			return nil, false, err
 		}
-		out, ok := par(in)
-		return symbolValue{sym, out}, ok
+		out, ok, err := par(st)
+		return symbolValue{sym, out}, ok, err
 	}
 }
 
-func nilParser() parsec.Parser {
-	return func(in parsec.Vessel) (parsec.Output, bool) {
-		return nil, true
+func nilParser() parser.Parser {
+	return func(st *parser.State) (parser.Output, bool, error) {
+		return nil, true, nil
 	}
 }
 
@@ -248,95 +254,97 @@ func parseFields(fi []interface{}) []*Field {
 	return fields
 }
 
-func buildParser() parsec.Parser {
-	constantValue := parsec.Lexeme(parsec.Any(quotedString(), integer(), float()))
-	namespaceDef := parsec.Collect(
-		parsec.Identifier(), parsec.Identifier())
-	includeDef := parsec.Collect(
-		parsec.Lexeme(quotedString()))
-	var typeDef func(in parsec.Vessel) (parsec.Output, bool)
-	recurseTypeDef := func(in parsec.Vessel) (parsec.Output, bool) {
-		return typeDef(in)
+func buildParser() parser.Parser {
+	constantValue := parser.Lexeme(parser.Any(quotedString(), integer(), float()))
+	namespaceDef := parser.Collect(
+		parser.Identifier(), parser.Identifier())
+	includeDef := parser.Collect(
+		parser.Lexeme(quotedString()))
+	var typeDef func(st *parser.State) (parser.Output, bool, error)
+	recurseTypeDef := func(st *parser.State) (parser.Output, bool, error) {
+		return typeDef(st)
 	}
-	typeDef = parsec.Any(
-		parsec.Identifier(),
-		parsec.Collect(parsec.Symbol("list"),
-			parsec.Symbol("<"),
+	typeDef = parser.Any(
+		parser.Identifier(),
+		parser.Collect(parser.Symbol("list"),
+			parser.Symbol("<"),
 			recurseTypeDef,
-			parsec.Symbol(">")),
-		parsec.Collect(parsec.Symbol("set"),
-			parsec.Symbol("<"),
+			parser.Symbol(">")),
+		parser.Collect(parser.Symbol("set"),
+			parser.Symbol("<"),
 			recurseTypeDef,
-			parsec.Symbol(">")),
-		parsec.Collect(parsec.Symbol("map"),
-			parsec.Symbol("<"),
+			parser.Symbol(">")),
+		parser.Collect(parser.Symbol("map"),
+			parser.Symbol("<"),
 			recurseTypeDef,
-			parsec.Symbol(","),
+			parser.Symbol(","),
 			recurseTypeDef,
-			parsec.Symbol(">")),
+			parser.Symbol(">")),
 	)
-	typedefDef := parsec.Collect(typeDef, parsec.Identifier())
-	constDef := parsec.Collect(
-		typeDef, parsec.Identifier(), parsec.Symbol("="), constantValue)
-	enumItemDef := parsec.Collect(
-		parsec.Identifier(),
-		parsec.Any(
-			parsec.All(parsec.Symbol("="), parsec.Lexeme(integer())),
+	typedefDef := parser.Collect(typeDef, parser.Identifier())
+	constDef := parser.Collect(
+		typeDef, parser.Identifier(), parser.Symbol("="), constantValue)
+	enumItemDef := parser.Collect(
+		parser.Identifier(),
+		parser.Any(
+			parser.All(parser.Symbol("="), parser.Lexeme(integer())),
 			nilParser(),
 		),
-		parsec.Any(parsec.Symbol(","), parsec.Symbol("")),
+		parser.Any(parser.Symbol(","), parser.Symbol("")),
 	)
-	enumDef := parsec.Collect(
-		parsec.Identifier(),
-		parsec.Symbol("{"),
-		parsec.Many(enumItemDef),
-		parsec.Symbol("}"),
+	enumDef := parser.Collect(
+		parser.Identifier(),
+		parser.Symbol("{"),
+		parser.Many(enumItemDef),
+		parser.Symbol("}"),
 	)
-	structFieldDef := parsec.Collect(
-		parsec.Lexeme(integer()), parsec.Symbol(":"),
-		parsec.Any(parsec.Symbol("required"), parsec.Symbol("optional"), parsec.Symbol("")),
-		typeDef, parsec.Identifier(),
+	structFieldDef := parser.Collect(
+		parser.Lexeme(integer()), parser.Symbol(":"),
+		parser.Any(parser.Symbol("required"), parser.Symbol("optional"), parser.Symbol("")),
+		typeDef, parser.Identifier(),
 		// Default
-		parsec.Any(
-			parsec.All(parsec.Symbol("="),
-				parsec.Lexeme(parsec.Any(
-					parsec.Identifier(), quotedString(),
-					parsec.Try(float()), integer()))),
+		parser.Any(
+			parser.All(parser.Symbol("="),
+				parser.Lexeme(parser.Any(
+					parser.Identifier(), quotedString(),
+					parser.Try(float()), integer()))),
 			nilParser(),
 		),
-		parsec.Skip(parsec.Many(parsec.Symbol(","))),
+		parser.Skip(parser.Many(parser.Symbol(","))),
 	)
-	structDef := parsec.Collect(
-		parsec.Identifier(),
-		parsec.Symbol("{"),
-		parsec.Many(structFieldDef),
-		parsec.Symbol("}"),
+	structDef := parser.Collect(
+		parser.Identifier(),
+		parser.Symbol("{"),
+		parser.Many(structFieldDef),
+		parser.Symbol("}"),
 	)
-	serviceMethodDef := parsec.Collect(
-		typeDef, parsec.Identifier(),
-		parsec.Symbol("("),
-		parsec.Many(structFieldDef),
-		parsec.Symbol(")"),
+	serviceMethodDef := parser.Collect(
+		// // parser.Comments(),
+		// parser.Whitespace(),
+		typeDef, parser.Identifier(),
+		parser.Symbol("("),
+		parser.Many(structFieldDef),
+		parser.Symbol(")"),
 		// Exceptions
-		parsec.Any(
-			parsec.Collect(
-				parsec.Symbol("throws"),
-				parsec.Symbol("("),
-				parsec.Many(structFieldDef),
-				parsec.Symbol(")"),
+		parser.Any(
+			parser.Collect(
+				parser.Symbol("throws"),
+				parser.Symbol("("),
+				parser.Many(structFieldDef),
+				parser.Symbol(")"),
 			),
 			nilParser(),
 		),
-		parsec.Any(parsec.Symbol(","), parsec.Symbol("")),
+		parser.Any(parser.Symbol(","), parser.Symbol(";"), parser.Symbol("")),
 	)
-	serviceDef := parsec.Collect(
-		parsec.Identifier(),
-		parsec.Symbol("{"),
-		parsec.Many(serviceMethodDef),
-		parsec.Symbol("}"),
+	serviceDef := parser.Collect(
+		parser.Identifier(),
+		parser.Symbol("{"),
+		parser.Many(serviceMethodDef),
+		parser.Symbol("}"),
 	)
-	thriftSpec := parsec.All(parsec.Whitespace(), parsec.Many(
-		symbolDispatcher(map[string]parsec.Parser{
+	thriftSpec := parser.All(parser.Whitespace(), parser.Many(
+		symbolDispatcher(map[string]parser.Parser{
 			"namespace": namespaceDef,
 			"typedef":   typedefDef,
 			"const":     constDef,
@@ -350,7 +358,7 @@ func buildParser() parsec.Parser {
 	return thriftSpec
 }
 
-func (p *Parser) outputToThrift(obj parsec.Output) (*Thrift, error) {
+func (p *Parser) outputToThrift(obj parser.Output) (*Thrift, error) {
 	thrift := &Thrift{
 		Namespaces: make(map[string]string),
 		Typedefs:   make(map[string]*Type),
@@ -449,24 +457,30 @@ func (p *Parser) Parse(r io.Reader) (*Thrift, error) {
 		panic(err)
 	}
 
-	in := &parsec.StringVessel{}
-	in.SetSpec(spec)
-	in.SetInput(string(b))
-	out, ok := simpleParser(in)
+	str := string(b)
+	in := parser.NewStringInput(str)
+	st := &parser.State{
+		Input: in,
+		Spec:  spec,
+	}
+	out, ok, err := simpleParser(st)
 
+	if err != nil && err != io.EOF {
+		return nil, err
+	}
 	if !ok {
 		return nil, ErrParserFail
 	}
 
-	_, unfinished := in.Next()
-	if unfinished {
-		pos := in.GetPosition()
+	_, err = st.Input.Next()
+	if err != io.EOF {
+		pos := in.Position()
 		return nil, &ErrSyntaxError{
 			File:   pos.Name,
 			Line:   pos.Line,
 			Column: pos.Column,
 			Offset: pos.Offset,
-			Left:   in.GetInput().(string),
+			Left:   str[pos.Offset:],
 		}
 	}
 

@@ -40,6 +40,7 @@ type Struct struct {
 }
 
 type Method struct {
+	Comment    string
 	Name       string
 	ReturnType *Type
 	Arguments  []*Field
