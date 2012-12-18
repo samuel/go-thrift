@@ -472,7 +472,9 @@ func (p *Parser) Parse(r io.Reader) (*Thrift, error) {
 		return nil, ErrParserFail
 	}
 
-	_, err = st.Input.Next()
+	if err != io.EOF {
+		_, err = st.Input.Next()
+	}
 	if err != io.EOF {
 		pos := in.Position()
 		return nil, &ErrSyntaxError{
