@@ -14,7 +14,7 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/samuel/go-thrift/parser"
+	"go-thrift/parser"
 )
 
 var (

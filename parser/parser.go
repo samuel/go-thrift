@@ -153,7 +153,7 @@ func float() parser.Parser {
 			next, err := st.Input.Next()
 			if err == io.EOF || !((next >= '0' && next <= '9') || next == '.') {
 				break
-			} else {
+			} else if err != nil {
 				return nil, false, err
 			}
 			st.Input.Pop(1)
@@ -307,7 +307,7 @@ func buildParser() parser.Parser {
 			parser.All(parser.Symbol("="),
 				parser.Lexeme(parser.Any(
 					parser.Identifier(), quotedString(),
-					float(), integer()))),
+					parser.Try(float()), integer()))),
 			nilParser(),
 		),
 		parser.Skip(parser.Many(parser.Symbol(","))),
