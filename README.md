@@ -78,7 +78,7 @@ languages in the future.
 
 How to use the generator:
 
-    $ go install github.com/samuel/go-thrift/generator
+    $ go get github.com/samuel/go-thrift/generator
 
     $ generator --help
     Usage of parsimony: [options] inputfile outputfile
