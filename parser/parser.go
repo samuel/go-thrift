@@ -10,6 +10,7 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -495,6 +496,11 @@ func (p *Parser) ParseFile(filename string) (*Thrift, error) {
 	if p.Filesystem != nil {
 		r, err = p.Filesystem.Open(filename)
 	} else {
+		filename, err = filepath.Abs(filename)
+		if err != nil {
+			return nil, err
+		}
+		filename = filepath.Clean(filename)
 		r, err = os.Open(filename)
 	}
 	if err != nil {
