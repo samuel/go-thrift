@@ -388,11 +388,13 @@ func (g *GoGenerator) Generate(name string, out io.Writer) (err error) {
 	if len(g.Thrift.Enums) > 0 || len(g.Thrift.Exceptions) > 0 {
 		imports = append(imports, "fmt")
 	}
-	g.write(out, "\nimport (\n")
-	for _, in := range imports {
-		g.write(out, "\t\"%s\"\n", in)
+	if len(imports) > 0 {
+		g.write(out, "\nimport (\n")
+		for _, in := range imports {
+			g.write(out, "\t\"%s\"\n", in)
+		}
+		g.write(out, ")\n")
 	}
-	g.write(out, ")\n")
 
 	//
 
