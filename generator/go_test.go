@@ -14,6 +14,7 @@ import (
 
 // Regular expressions
 const (
+	// http://golang.org/ref/spec#identifier
 	GO_IDENTIFIER = "[\\pL_][\\pL\\pN_]*"
 )
 
@@ -50,23 +51,37 @@ func Includes(pattern string, in string) bool {
 	return matched == true && err == nil
 }
 
-// Generated package names should not contain dashes.
+// Generated package names should be valid identifiers.
 // Per: http://golang.org/ref/spec#Package_clause
-func TestPackageNameWithDash(t *testing.T) {
+func TestGeneratesValidPackageNames(t *testing.T) {
 	var (
-		in  *bytes.Buffer
-		out string
-		err error
+		in    *bytes.Buffer
+		out   string
+		err   error
+		tests map[string]string
+		is_err   bool
 	)
 	in = bytes.NewBufferString(THRIFT_SIMPLE)
-	if out, err = GenerateThrift("foo-bar", in); err != nil {
-		t.Fatalf("Could not generate Thrift: %v", err)
+	tests = map[string]string{
+		"foo-bar": "foo_bar",
+		"_foo":    "_foo",
+		"fooαβ":   "fooαβ",
 	}
-	t.Logf("Generated Thrift:\n%v\n", out)
-	if !Includes("package "+GO_IDENTIFIER+"\n", out) {
-		t.Errorf("Package name must be a valid identifier")
-	}
-	if !Includes("package foo_bar\n", out) {
-		t.Errorf("Package name must convert dashes to underscores")
+	for test, expected := range tests {
+		if out, err = GenerateThrift(test, in); err != nil {
+			t.Fatalf("Could not generate Thrift: %v", err)
+		}
+		if !Includes("package "+GO_IDENTIFIER+"\n", out) {
+			t.Errorf("Couldn't find valid package for test %v", test)
+			is_err = true
+		}
+		if !Includes("package "+expected+"\n", out) {
+			t.Errorf("Couldn't find expected package '%v' for test %v", expected, test)
+			is_err = true
+		}
+		if is_err {
+			t.Logf("Problem with generated Thrift:\n%v\n", out)
+			is_err = false
+		}
 	}
 }
