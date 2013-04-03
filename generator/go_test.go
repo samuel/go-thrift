@@ -55,17 +55,18 @@ func Includes(pattern string, in string) bool {
 // Per: http://golang.org/ref/spec#Package_clause
 func TestGeneratesValidPackageNames(t *testing.T) {
 	var (
-		in    *bytes.Buffer
-		out   string
-		err   error
-		tests map[string]string
-		is_err   bool
+		in     *bytes.Buffer
+		out    string
+		err    error
+		tests  map[string]string
+		is_err bool
 	)
 	in = bytes.NewBufferString(THRIFT_SIMPLE)
 	tests = map[string]string{
 		"foo-bar": "foo_bar",
 		"_foo":    "_foo",
 		"fooαβ":   "fooαβ",
+		"0foo":    "_0foo",
 	}
 	for test, expected := range tests {
 		if out, err = GenerateThrift(test, in); err != nil {
