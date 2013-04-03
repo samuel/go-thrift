@@ -12,11 +12,19 @@ import (
 	"testing"
 )
 
-const TEST_SIMPLE_THRIFT = `struct UserProfile {
+// Regular expressions
+const (
+	GO_IDENTIFIER = "[\\pL_][\\pL\\pN_]*"
+)
+
+// Thrift constants
+const (
+	THRIFT_SIMPLE = `struct UserProfile {
   1: i32 uid,
   2: string name,
   3: string blurb
 }`
+)
 
 func GenerateThrift(name string, in io.Reader) (out string, err error) {
 	var (
@@ -42,21 +50,23 @@ func Includes(pattern string, in string) bool {
 	return matched == true && err == nil
 }
 
+// Generated package names should not contain dashes.
+// Per: http://golang.org/ref/spec#Package_clause
 func TestPackageNameWithDash(t *testing.T) {
 	var (
 		in  *bytes.Buffer
 		out string
 		err error
 	)
-	in = bytes.NewBufferString(TEST_SIMPLE_THRIFT)
+	in = bytes.NewBufferString(THRIFT_SIMPLE)
 	if out, err = GenerateThrift("foo-bar", in); err != nil {
 		t.Fatalf("Could not generate Thrift: %v", err)
 	}
 	t.Logf("Generated Thrift:\n%v\n", out)
-	if Includes("package [A-Za-z_0-9]*-[A-Za-z_0-9]*", out) {
-		t.Errorf("Package name must not contain dashes")
+	if !Includes("package "+GO_IDENTIFIER+"\n", out) {
+		t.Errorf("Package name must be a valid identifier")
 	}
-	if !Includes("package foo_bar", out) {
+	if !Includes("package foo_bar\n", out) {
 		t.Errorf("Package name must convert dashes to underscores")
 	}
 }
