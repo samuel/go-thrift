@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"reflect"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -31,6 +32,24 @@ func lowerCamelCase(st string) string {
 	// st = thrift.CamelCase(st)
 	// return strings.ToLower(st[:1]) + st[1:]
 	return camelCase(st)
+}
+
+// Converts a string to a valid Golang identifier, as defined in
+// http://golang.org/ref/spec#identifier
+// by converting invalid characters to the value of replace.
+// If the first character is a Unicode digit, then replace is
+// prepended to the string.
+func validIdentifier(st string, replace string) string {
+	var (
+		invalid_rune  = regexp.MustCompile("[^\\pL\\pN_]")
+		invalid_start = regexp.MustCompile("^\\pN")
+		out           string
+	)
+	out = invalid_rune.ReplaceAllString(st, "_")
+	if invalid_start.MatchString(out) {
+		out = fmt.Sprintf("%v%v", replace, out)
+	}
+	return out
 }
 
 // Given a map with string keys, return a sorted list of keys.
