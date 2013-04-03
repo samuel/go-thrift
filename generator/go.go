@@ -381,9 +381,12 @@ func (g *GoGenerator) Generate(name string, out io.Writer) (err error) {
 	g.write(out, "\npackage %s\n", packageName)
 
 	// Imports
-	imports := []string{"fmt"}
+	imports := []string{}
 	if len(g.Thrift.Enums) > 0 {
 		imports = append(imports, "strconv")
+	}
+	if len(g.Thrift.Enums) > 0 || len(g.Thrift.Exceptions) > 0 {
+		imports = append(imports, "fmt")
 	}
 	g.write(out, "\nimport (\n")
 	for _, in := range imports {
