@@ -312,7 +312,6 @@ func buildParser() parser.Parser {
 			parser.Collect(parser.Lexeme(integer()), parser.Symbol(":")),
 			nilParser(),
 		),
-		// parser.Lexeme(integer()), parser.Symbol(":"),
 		parser.Any(parser.Symbol("required"), parser.Symbol("optional"), parser.Symbol("")),
 		typeDef, parser.Identifier(),
 		// Default
