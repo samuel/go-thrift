@@ -92,3 +92,10 @@ How to use the generator:
     $ generator cassandra.thrift $GOPATH/cassandra/thrift.go
 
     # Then can import "cassandra"
+
+TODO
+----
+
+* "oneway" for methods
+* "extends" for services
+* default values (is it worth it? maybe just annotations?)

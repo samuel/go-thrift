@@ -242,14 +242,22 @@ func parseType(t interface{}) *Type {
 
 func parseFields(fi []interface{}) []*Field {
 	fields := make([]*Field, len(fi))
+	nextId := 1
 	for i, f := range fi {
 		parts := f.([]interface{})
 		field := &Field{}
-		field.Id = int(parts[0].(int64))
-		field.Optional = strings.ToLower(parts[2].(string)) == "optional"
-		field.Type = parseType(parts[3])
-		field.Name = parts[4].(string)
-		field.Default = parts[5]
+		if parts[0] != nil {
+			field.Id = int(parts[0].([]interface{})[0].(int64))
+		} else {
+			field.Id = nextId
+		}
+		if field.Id >= nextId {
+			nextId = field.Id + 1
+		}
+		field.Optional = strings.ToLower(parts[1].(string)) == "optional"
+		field.Type = parseType(parts[2])
+		field.Name = parts[3].(string)
+		field.Default = parts[4]
 		fields[i] = field
 	}
 	return fields
@@ -300,7 +308,11 @@ func buildParser() parser.Parser {
 		parser.Symbol("}"),
 	)
 	structFieldDef := parser.Collect(
-		parser.Lexeme(integer()), parser.Symbol(":"),
+		parser.Any(
+			parser.Collect(parser.Lexeme(integer()), parser.Symbol(":")),
+			nilParser(),
+		),
+		// parser.Lexeme(integer()), parser.Symbol(":"),
 		parser.Any(parser.Symbol("required"), parser.Symbol("optional"), parser.Symbol("")),
 		typeDef, parser.Identifier(),
 		// Default
