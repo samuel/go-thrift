@@ -333,6 +333,7 @@ func buildParser() parser.Parser {
 	serviceMethodDef := parser.Collect(
 		// // parser.Comments(),
 		// parser.Whitespace(),
+		parser.Any(parser.Symbol("oneway"), parser.Symbol("")),
 		typeDef, parser.Identifier(),
 		parser.Symbol("("),
 		parser.Many(structFieldDef),
@@ -430,9 +431,14 @@ func (p *Parser) outputToThrift(obj parser.Output) (*Thrift, error) {
 			}
 			for _, m := range val[2].([]interface{}) {
 				parts := m.([]interface{})
+				oneway := parts[0].(string) == "oneway"
+				returnType := parseType(parts[1])
+				if oneway && returnType != nil {
+					return nil, errors.New("thrift: oneway methods must be void")
+				}
 				var exc []*Field = nil
-				if parts[5] != nil {
-					exc = parseFields((parts[5].([]interface{}))[2].([]interface{}))
+				if parts[6] != nil {
+					exc = parseFields((parts[6].([]interface{}))[2].([]interface{}))
 				} else {
 					exc = make([]*Field, 0)
 				}
@@ -440,9 +446,10 @@ func (p *Parser) outputToThrift(obj parser.Output) (*Thrift, error) {
 					f.Optional = true
 				}
 				method := &Method{
-					Name:       parts[1].(string),
-					ReturnType: parseType(parts[0]),
-					Arguments:  parseFields(parts[3].([]interface{})),
+					Name:       parts[2].(string),
+					Oneway:     oneway,
+					ReturnType: returnType,
+					Arguments:  parseFields(parts[4].([]interface{})),
 					Exceptions: exc,
 				}
 				s.Methods[method.Name] = method

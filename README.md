@@ -70,6 +70,14 @@ then `Flush() error` is called after `protocol.WriteMessageEnd`.
 _Framed transport_ is supported by wrapping a value implementing
 `io.ReadWriteCloser` with `thrift.NewFramedReadWriteCloser(value)`
 
+### One-way requests
+
+One-way request support needs to be enabled on the RPC codec explicitely.
+The reason they're not allowed by default is because the Go RPC package
+doesn't actually support one-way requests. To get around this requires
+a rather nasty hack of using channels to track pending requests in the
+codec and faking responses for one-way requests.
+
 Parser & Code Generator
 -----------------------
 
@@ -96,6 +104,5 @@ How to use the generator:
 TODO
 ----
 
-* "oneway" for methods
 * "extends" for services
 * default values (is it worth it? maybe just annotations?)

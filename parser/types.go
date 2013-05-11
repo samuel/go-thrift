@@ -42,6 +42,7 @@ type Struct struct {
 type Method struct {
 	Comment    string
 	Name       string
+	Oneway     bool
 	ReturnType *Type
 	Arguments  []*Field
 	Exceptions []*Field

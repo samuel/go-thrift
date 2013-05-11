@@ -264,7 +264,11 @@ func (g *GoGenerator) writeService(out io.Writer, svc *parser.Service) error {
 	for _, k := range methodNames {
 		method := svc.Methods[k]
 		mName := camelCase(method.Name)
-		g.write(out, "\nfunc (s *%sServer) %s(req *%s%sRequest, res *%s%sResponse) error {\n", svcName, mName, svcName, mName, svcName, mName)
+		resArg := ""
+		if !method.Oneway {
+			resArg = fmt.Sprintf(", res *%s%sResponse", svcName, mName)
+		}
+		g.write(out, "\nfunc (s *%sServer) %s(req *%s%sRequest%s) error {\n", svcName, mName, svcName, mName, resArg)
 		args := make([]string, 0)
 		for _, arg := range method.Arguments {
 			aName := camelCase(arg.Name)
@@ -276,11 +280,13 @@ func (g *GoGenerator) writeService(out io.Writer, svc *parser.Service) error {
 			val = "val, "
 		}
 		g.write(out, "\t%serr := s.Implementation.%s(%s)\n", val, mName, strings.Join(args, ", "))
-		g.write(out, "\tswitch e := err.(type) {\n")
-		for _, ex := range method.Exceptions {
-			g.write(out, "\tcase %s:\n\t\tres.%s = e\n\t\terr = nil\n", g.formatType(ex.Type), camelCase(ex.Name))
+		if len(method.Exceptions) > 0 {
+			g.write(out, "\tswitch e := err.(type) {\n")
+			for _, ex := range method.Exceptions {
+				g.write(out, "\tcase %s:\n\t\tres.%s = e\n\t\terr = nil\n", g.formatType(ex.Type), camelCase(ex.Name))
+			}
+			g.write(out, "\t}\n")
 		}
-		g.write(out, "\t}\n")
 		if !isVoid {
 			g.write(out, "\tres.Value = val\n")
 		}
@@ -288,22 +294,28 @@ func (g *GoGenerator) writeService(out io.Writer, svc *parser.Service) error {
 	}
 
 	for _, k := range methodNames {
+		// Request struct
 		method := svc.Methods[k]
-		if err := g.writeStruct(out, &parser.Struct{svcName + camelCase(method.Name) + "Request", method.Arguments}); err != nil {
+		reqStructName := svcName + camelCase(method.Name) + "Request"
+		if err := g.writeStruct(out, &parser.Struct{reqStructName, method.Arguments}); err != nil {
 			return err
 		}
 
-		args := make([]*parser.Field, 0, len(method.Exceptions))
-		if method.ReturnType != nil && method.ReturnType.Name != "void" {
-			args = append(args, &parser.Field{0, "value", len(method.Exceptions) != 0, method.ReturnType, nil})
-		}
-		for _, ex := range method.Exceptions {
-			args = append(args, ex)
-		}
-
-		res := &parser.Struct{svcName + camelCase(method.Name) + "Response", args}
-		if err := g.writeStruct(out, res); err != nil {
-			return err
+		if method.Oneway {
+			g.write(out, "\nfunc (r *%s) Oneway() bool {\n\treturn true\n}\n", reqStructName)
+		} else {
+			// Response struct
+			args := make([]*parser.Field, 0, len(method.Exceptions))
+			if method.ReturnType != nil && method.ReturnType.Name != "void" {
+				args = append(args, &parser.Field{0, "value", len(method.Exceptions) != 0, method.ReturnType, nil})
+			}
+			for _, ex := range method.Exceptions {
+				args = append(args, ex)
+			}
+			res := &parser.Struct{svcName + camelCase(method.Name) + "Response", args}
+			if err := g.writeStruct(out, res); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -312,10 +324,14 @@ func (g *GoGenerator) writeService(out io.Writer, svc *parser.Service) error {
 	for _, k := range methodNames {
 		method := svc.Methods[k]
 		methodName := camelCase(method.Name)
+		returnType := "error"
+		if !method.Oneway {
+			returnType = g.formatReturnType(method.ReturnType)
+		}
 		g.write(out, "\nfunc (s *%sClient) %s(%s) %s {\n",
 			svcName, methodName,
 			g.formatArguments(method.Arguments),
-			g.formatReturnType(method.ReturnType))
+			returnType)
 
 		// Request
 		g.write(out, "\treq := &%s%sRequest{\n", svcName, methodName)
@@ -326,7 +342,12 @@ func (g *GoGenerator) writeService(out io.Writer, svc *parser.Service) error {
 		g.write(out, "\t}\n")
 
 		// Response
-		g.write(out, "\tres := &%s%sResponse{}\n", svcName, methodName)
+		if method.Oneway {
+			// g.write(out, "\tvar res *%s%sResponse = nil\n", svcName, methodName)
+			g.write(out, "\tvar res interface{} = nil\n")
+		} else {
+			g.write(out, "\tres := &%s%sResponse{}\n", svcName, methodName)
+		}
 
 		// Call
 		g.write(out, "\terr := s.Client.Call(\"%s\", req, res)\n", method.Name)
