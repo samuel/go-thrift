@@ -6,7 +6,6 @@ package thrift
 
 import (
 	"encoding/binary"
-	"errors"
 	"io"
 	"math"
 )
@@ -119,7 +118,7 @@ func (p *compactProtocol) readVarint(r io.Reader) (int64, error) {
 		if val, n := binary.Varint(b[:n]); n > 0 {
 			return val, nil
 		} else if n < 0 {
-			return val, errors.New("thrift: varint overflow on read")
+			return val, ProtocolError{"CompactProtocol", "varint overflow on read"}
 		}
 	}
 	panic("Shouldn't be reached")
@@ -142,7 +141,7 @@ func (p *compactProtocol) readUvarint(r io.Reader) (uint64, error) {
 		if val, n := binary.Uvarint(b[:n]); n > 0 {
 			return val, nil
 		} else if n < 0 {
-			return val, errors.New("thrift: varint overflow on read")
+			return val, ProtocolError{"CompactProtocol", "varint overflow on read"}
 		}
 	}
 	panic("Shouldn't be reached")
@@ -178,7 +177,7 @@ func (p *compactProtocol) WriteStructBegin(w io.Writer, name string) error {
 // of the field stack.
 func (p *compactProtocol) WriteStructEnd(w io.Writer) error {
 	if len(p.structs) == 0 {
-		return errors.New("Struct end without matching begin")
+		return ProtocolError{"CompactProtocol", "Struct end without matching begin"}
 	}
 	fid := p.structs[len(p.structs)-1]
 	p.structs = p.structs[:len(p.structs)-1]
@@ -355,7 +354,7 @@ func (p *compactProtocol) ReadMessageBegin(r io.Reader) (string, byte, int32, er
 		return "", 0, -1, err
 	}
 	if protocolId != compactProtocolId {
-		return "", 0, -1, errors.New("thrift: invalid compact protocol ID")
+		return "", 0, -1, ProtocolError{"CompactProtocol", "invalid compact protocol ID"}
 	}
 	versionAndType, err := p.ReadByte(r)
 	if err != nil {
@@ -363,7 +362,7 @@ func (p *compactProtocol) ReadMessageBegin(r io.Reader) (string, byte, int32, er
 	}
 	version := versionAndType & compactVersionMask
 	if version != compactVersion {
-		return "", 0, -1, errors.New("thrift: invalid compact protocol version")
+		return "", 0, -1, ProtocolError{"CompactProtocol", "invalid compact protocol version"}
 	}
 	msgType := (versionAndType >> compactTypeShiftAmount) & 0x03
 	seqId, err := p.readUvarint(r)
@@ -385,7 +384,7 @@ func (p *compactProtocol) ReadStructBegin(r io.Reader) error {
 	return nil
 }
 
-// Doesn't actually consume any wire data, just removes the last field for 
+// Doesn't actually consume any wire data, just removes the last field for
 // this struct from the field stack.
 func (p *compactProtocol) ReadStructEnd(r io.Reader) error {
 	// consume the last field we read off the wire
@@ -394,7 +393,7 @@ func (p *compactProtocol) ReadStructEnd(r io.Reader) error {
 	return nil
 }
 
-// Read a field header off the wire. 
+// Read a field header off the wire.
 func (p *compactProtocol) ReadFieldBegin(r io.Reader) (byte, int16, error) {
 	compactType, err := p.ReadByte(r)
 	if err != nil {
@@ -528,7 +527,7 @@ func (p *compactProtocol) ReadString(r io.Reader) (string, error) {
 	if err != nil || ln == 0 {
 		return "", err
 	} else if ln < 0 {
-		return "", errors.New("thrift: negative length in CompactProtocol.ReadString")
+		return "", ProtocolError{"CompactProtocol", "negative length in CompactProtocol.ReadString"}
 	}
 	b := p.readBuf
 	if int(ln) > len(b) {
@@ -547,7 +546,7 @@ func (p *compactProtocol) ReadBytes(r io.Reader) ([]byte, error) {
 	if err != nil || ln == 0 {
 		return nil, err
 	} else if ln < 0 {
-		return nil, errors.New("thrift: negative length in CompactProtocol.ReadBytes")
+		return nil, ProtocolError{"CompactProtocol", "negative length in CompactProtocol.ReadBytes"}
 	}
 	b := make([]byte, ln)
 	if _, err := io.ReadFull(r, b); err != nil {

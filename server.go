@@ -42,7 +42,7 @@ func (c *serverCodec) ReadRequestHeader(request *rpc.Request) error {
 	request.Seq = uint64(seq)
 
 	if messageType != messageTypeCall { // Currently don't support one way
-		return errors.New("Exception Call message type")
+		return errors.New("thrift: exception Call message type")
 	}
 
 	return nil

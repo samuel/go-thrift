@@ -39,7 +39,7 @@ func (e *ErrSyntaxError) Error() string {
 }
 
 var (
-	ErrParserFail = errors.New("Parsing failed entirely")
+	ErrParserFail = errors.New("thrift.parser: parsing failed entirely")
 
 	spec = parser.Spec{
 		CommentStart:   "/*",

@@ -409,5 +409,5 @@ func ReadValue(r io.Reader, p Protocol, thriftType byte) (interface{}, error) {
 		}
 		return set, p.ReadSetEnd(r)
 	}
-	return nil, errors.New("unknown type")
+	return nil, errors.New("thrift: unknown type")
 }

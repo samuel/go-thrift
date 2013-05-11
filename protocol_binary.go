@@ -6,14 +6,8 @@ package thrift
 
 import (
 	"encoding/binary"
-	"errors"
 	"io"
 	"math"
-)
-
-var (
-	ErrBadVersion              = errors.New("Bad version in ReadMessageBegin")
-	ErrNoProtocolVersionHeader = errors.New("No protocol version header")
 )
 
 const (
@@ -200,7 +194,7 @@ func (p *binaryProtocol) ReadMessageBegin(r io.Reader) (name string, messageType
 	if size < 0 {
 		version := uint32(size) & versionMask
 		if version != version1 {
-			err = ErrBadVersion
+			err = ProtocolError{"BinaryProtocl", "bad version in ReadMessageBegin"}
 			return
 		}
 		messageType = byte(uint32(size) & typeMask)
@@ -209,7 +203,7 @@ func (p *binaryProtocol) ReadMessageBegin(r io.Reader) (name string, messageType
 		}
 	} else {
 		if p.strictRead {
-			err = ErrNoProtocolVersionHeader
+			err = ProtocolError{"BinaryProtocol", "no protocol version header"}
 			return
 		}
 		nameBytes := make([]byte, size)

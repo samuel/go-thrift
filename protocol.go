@@ -5,8 +5,18 @@
 package thrift
 
 import (
+	"fmt"
 	"io"
 )
+
+type ProtocolError struct {
+	Protocol string
+	Message  string
+}
+
+func (e ProtocolError) Error() string {
+	return fmt.Sprintf("thrift: [%s] %s", e.Protocol, e.Message)
+}
 
 type Protocol interface {
 	WriteMessageBegin(w io.Writer, name string, messageType byte, seqid int32) error

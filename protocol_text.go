@@ -11,7 +11,7 @@ import (
 )
 
 var (
-	ErrUnimplemented = errors.New("unimplemented")
+	ErrUnimplemented = errors.New("thrift: unimplemented")
 )
 
 type textProtocol struct {
