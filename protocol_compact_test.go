@@ -72,8 +72,8 @@ func TestCompactString(t *testing.T) {
 	p := NewCompactProtocol()
 
 	expStrings := map[string][]byte{
-		"":    []byte{0},
-		"foo": []byte{3, 102, 111, 111},
+		"":    {0},
+		"foo": {3, 102, 111, 111},
 	}
 
 	for expValue, expBytes := range expStrings {
@@ -102,10 +102,10 @@ func TestCompactI16(t *testing.T) {
 	p := NewCompactProtocol()
 
 	exp := map[int16][]byte{
-		0:     []byte{0},
-		-1:    []byte{1},
-		1:     []byte{2},
-		12345: []byte{242, 192, 1},
+		0:     {0},
+		-1:    {1},
+		1:     {2},
+		12345: {242, 192, 1},
 	}
 
 	for expValue, expBytes := range exp {
@@ -134,10 +134,10 @@ func TestCompactI32(t *testing.T) {
 	p := NewCompactProtocol()
 
 	exp := map[int32][]byte{
-		0:          []byte{0},
-		-1:         []byte{1},
-		1:          []byte{2},
-		1234567890: []byte{164, 139, 176, 153, 9},
+		0:          {0},
+		-1:         {1},
+		1:          {2},
+		1234567890: {164, 139, 176, 153, 9},
 	}
 
 	for expValue, expBytes := range exp {
