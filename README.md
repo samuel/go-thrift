@@ -1,7 +1,7 @@
 Thrift Package for Go
 =====================
 
-API Documentation: <http://go.pkgdoc.org/github.com/samuel/go-thrift>
+API Documentation: <http://godoc.org/github.com/samuel/go-thrift>
 
 License
 -------
