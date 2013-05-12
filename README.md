@@ -72,11 +72,17 @@ _Framed transport_ is supported by wrapping a value implementing
 
 ### One-way requests
 
-One-way request support needs to be enabled on the RPC codec explicitely.
+#### Client
+
+One-way request support needs to be enabled on the RPC codec explicitly.
 The reason they're not allowed by default is because the Go RPC package
 doesn't actually support one-way requests. To get around this requires
 a rather janky hack of using channels to track pending requests in the
 codec and faking responses.
+
+#### Server
+
+One-way requests aren't yet implemented on the server side.
 
 Parser & Code Generator
 -----------------------
