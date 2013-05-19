@@ -69,7 +69,7 @@ func startServer() {
 func TestRPCClientSuccess(t *testing.T) {
 	once.Do(startServer)
 
-	c, err := Dial("tcp", serverAddr, true, NewBinaryProtocol(true, false))
+	c, err := Dial("tcp", serverAddr, true, NewBinaryProtocol(true, false), false)
 	if err != nil {
 		t.Fatalf("NewClient returned error: %+v", err)
 	}
@@ -86,7 +86,7 @@ func TestRPCClientSuccess(t *testing.T) {
 func TestRPCClientFail(t *testing.T) {
 	once.Do(startServer)
 
-	c, err := Dial("tcp", serverAddr, true, NewBinaryProtocol(true, false))
+	c, err := Dial("tcp", serverAddr, true, NewBinaryProtocol(true, false), false)
 	if err != nil {
 		t.Fatalf("NewClient returned error: %+v", err)
 	}
@@ -111,7 +111,7 @@ func TestRPCClientFail(t *testing.T) {
 func TestRPCMallocCount(t *testing.T) {
 	once.Do(startServer)
 
-	c, err := Dial("tcp", serverAddr, true, NewBinaryProtocol(true, false))
+	c, err := Dial("tcp", serverAddr, true, NewBinaryProtocol(true, false), false)
 	if err != nil {
 		t.Fatalf("NewClient returned error: %+v", err)
 	}
