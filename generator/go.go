@@ -89,6 +89,21 @@ func (g *GoGenerator) formatType(typ *parser.Type) string {
 		return "map[" + keyType + "]" + g.formatType(typ.ValueType)
 	}
 
+	if len(typ.IncludeName) > 0 {
+		if t := g.Thrift.Typedefs[typ.IncludeName+"."+typ.Name]; t != nil {
+			return g.formatType(t)
+		}
+		if e := g.Thrift.Enums[typ.IncludeName+"."+typ.Name]; e != nil {
+			return ptr + e.Name
+		}
+		if s := g.Thrift.Structs[typ.IncludeName+"."+typ.Name]; s != nil {
+			return "*" + s.Name
+		}
+		if e := g.Thrift.Exceptions[typ.IncludeName+"."+typ.Name]; e != nil {
+			return "*" + e.Name
+		}
+	}
+
 	if t := g.Thrift.Typedefs[typ.Name]; t != nil {
 		return g.formatType(t)
 	}
@@ -297,7 +312,7 @@ func (g *GoGenerator) writeService(out io.Writer, svc *parser.Service) error {
 		// Request struct
 		method := svc.Methods[k]
 		reqStructName := svcName + camelCase(method.Name) + "Request"
-		if err := g.writeStruct(out, &parser.Struct{reqStructName, method.Arguments}); err != nil {
+		if err := g.writeStruct(out, &parser.Struct{reqStructName, method.Arguments, ""}); err != nil {
 			return err
 		}
 
@@ -312,7 +327,7 @@ func (g *GoGenerator) writeService(out io.Writer, svc *parser.Service) error {
 			for _, ex := range method.Exceptions {
 				args = append(args, ex)
 			}
-			res := &parser.Struct{svcName + camelCase(method.Name) + "Response", args}
+			res := &parser.Struct{svcName + camelCase(method.Name) + "Response", args, ""}
 			if err := g.writeStruct(out, res); err != nil {
 				return err
 			}

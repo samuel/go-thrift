@@ -92,7 +92,7 @@ func main() {
 	}
 
 	p := &parser.Parser{}
-	th, err := p.ParseFile(filename)
+	th, err := p.ParseFile(filename, "")
 	if e, ok := err.(*parser.ErrSyntaxError); ok {
 		fmt.Printf("%s\n", e.Left)
 		fmt.Fprintf(os.Stderr, "%s\n", err.Error())

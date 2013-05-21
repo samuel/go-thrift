@@ -8,6 +8,7 @@ type Type struct {
 	Name      string
 	KeyType   *Type // If map
 	ValueType *Type // If map or list
+	IncludeName string
 }
 
 type EnumValue struct {
@@ -18,6 +19,7 @@ type EnumValue struct {
 type Enum struct {
 	Name   string
 	Values map[string]*EnumValue
+	IncludeName string
 }
 
 type Constant struct {
@@ -37,6 +39,7 @@ type Field struct {
 type Struct struct {
 	Name   string
 	Fields []*Field
+	IncludeName string
 }
 
 type Method struct {
