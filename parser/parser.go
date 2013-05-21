@@ -216,8 +216,8 @@ func nilParser() parser.Parser {
 	}
 }
 
-func parseType(t interface{}) *Type {
-	typ := &Type{}
+func parseType(t interface{}, includename string) *Type {
+	typ := &Type{IncludeName: includename}
 	switch t2 := t.(type) {
 	case string:
 		if t2 == "void" {
@@ -227,10 +227,10 @@ func parseType(t interface{}) *Type {
 	case []interface{}:
 		typ.Name = t2[0].(string)
 		if typ.Name == "map" {
-			typ.KeyType = parseType(t2[2])
-			typ.ValueType = parseType(t2[4])
+			typ.KeyType = parseType(t2[2], includename)
+			typ.ValueType = parseType(t2[4], includename)
 		} else if typ.Name == "list" || typ.Name == "set" {
-			typ.ValueType = parseType(t2[2])
+			typ.ValueType = parseType(t2[2], includename)
 		} else {
 			panic("Basic type should never not be map or list: " + typ.Name)
 		}
@@ -240,7 +240,7 @@ func parseType(t interface{}) *Type {
 	return typ
 }
 
-func parseFields(fi []interface{}) []*Field {
+func parseFields(fi []interface{}, includename string) []*Field {
 	fields := make([]*Field, len(fi))
 	nextId := 1
 	for i, f := range fi {
@@ -255,7 +255,7 @@ func parseFields(fi []interface{}) []*Field {
 			nextId = field.Id + 1
 		}
 		field.Optional = strings.ToLower(parts[1].(string)) == "optional"
-		field.Type = parseType(parts[2])
+		field.Type = parseType(parts[2], includename)
 		field.Name = parts[3].(string)
 		field.Default = parts[4]
 		fields[i] = field
@@ -371,7 +371,7 @@ func buildParser() parser.Parser {
 	return thriftSpec
 }
 
-func (p *Parser) outputToThrift(obj parser.Output) (*Thrift, error) {
+func (p *Parser) outputToThrift(obj parser.Output, includename string) (*Thrift, error) {
 	thrift := &Thrift{
 		Namespaces: make(map[string]string),
 		Typedefs:   make(map[string]*Type),
@@ -390,13 +390,14 @@ func (p *Parser) outputToThrift(obj parser.Output) (*Thrift, error) {
 		case "namespace":
 			thrift.Namespaces[strings.ToLower(val[0].(string))] = val[1].(string)
 		case "typedef":
-			thrift.Typedefs[val[1].(string)] = parseType(val[0])
+			thrift.Typedefs[val[1].(string)] = parseType(val[0], includename)
 		case "const":
 			thrift.Constants[val[1].(string)] = &Constant{val[1].(string), &Type{Name: val[0].(string)}, val[3]}
 		case "enum":
 			en := &Enum{
 				Name:   val[0].(string),
 				Values: make(map[string]*EnumValue),
+				IncludeName: includename,
 			}
 			next := 0
 			for _, e := range val[2].([]interface{}) {
@@ -417,12 +418,14 @@ func (p *Parser) outputToThrift(obj parser.Output) (*Thrift, error) {
 		case "struct":
 			thrift.Structs[val[0].(string)] = &Struct{
 				Name:   val[0].(string),
-				Fields: parseFields(val[2].([]interface{})),
+				Fields: parseFields(val[2].([]interface{}), includename),
+				IncludeName: includename,
 			}
 		case "exception":
 			thrift.Exceptions[val[0].(string)] = &Struct{
 				Name:   val[0].(string),
-				Fields: parseFields(val[2].([]interface{})),
+				Fields: parseFields(val[2].([]interface{}), includename),
+				IncludeName: includename,
 			}
 		case "service":
 			s := &Service{
@@ -432,13 +435,13 @@ func (p *Parser) outputToThrift(obj parser.Output) (*Thrift, error) {
 			for _, m := range val[2].([]interface{}) {
 				parts := m.([]interface{})
 				oneway := parts[0].(string) == "oneway"
-				returnType := parseType(parts[1])
+				returnType := parseType(parts[1], includename)
 				if oneway && returnType != nil {
 					return nil, errors.New("thrift: oneway methods must be void")
 				}
 				var exc []*Field = nil
 				if parts[6] != nil {
-					exc = parseFields((parts[6].([]interface{}))[2].([]interface{}))
+					exc = parseFields((parts[6].([]interface{}))[2].([]interface{}), includename)
 				} else {
 					exc = make([]*Field, 0)
 				}
@@ -449,7 +452,7 @@ func (p *Parser) outputToThrift(obj parser.Output) (*Thrift, error) {
 					Name:       parts[2].(string),
 					Oneway:     oneway,
 					ReturnType: returnType,
-					Arguments:  parseFields(parts[4].([]interface{})),
+					Arguments:  parseFields(parts[4].([]interface{}), includename),
 					Exceptions: exc,
 				}
 				s.Methods[method.Name] = method
@@ -458,11 +461,12 @@ func (p *Parser) outputToThrift(obj parser.Output) (*Thrift, error) {
 		case "include":
 			filename := val[0].(string)
 			filename = filename[1 : len(filename)-1]
-			tr, err := p.ParseFile(filename)
+			newincludename := strings.Split(filename, ".")[0]
+			tr, err := p.ParseFile(filename, newincludename)
 			if err != nil {
 				return nil, err
 			}
-			thrift.Includes[strings.Split(filename, ".")[0]] = tr
+			thrift.Includes[newincludename] = tr
 		default:
 			panic("Should never have an unhandled symbol: " + sym.symbol)
 		}
@@ -470,7 +474,7 @@ func (p *Parser) outputToThrift(obj parser.Output) (*Thrift, error) {
 	return thrift, nil
 }
 
-func (p *Parser) Parse(r io.Reader) (*Thrift, error) {
+func (p *Parser) Parse(r io.Reader, includename string) (*Thrift, error) {
 	b, err := ioutil.ReadAll(r)
 	if err != nil {
 		panic(err)
@@ -505,10 +509,10 @@ func (p *Parser) Parse(r io.Reader) (*Thrift, error) {
 		}
 	}
 
-	return p.outputToThrift(out)
+	return p.outputToThrift(out, includename)
 }
 
-func (p *Parser) ParseFile(filename string) (*Thrift, error) {
+func (p *Parser) ParseFile(filename, includename string) (*Thrift, error) {
 	var r io.ReadCloser
 	var err error
 	if p.Filesystem != nil {
@@ -526,5 +530,5 @@ func (p *Parser) ParseFile(filename string) (*Thrift, error) {
 	}
 	defer r.Close()
 
-	return p.Parse(r)
+	return p.Parse(r, includename)
 }
