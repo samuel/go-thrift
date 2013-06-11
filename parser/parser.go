@@ -292,7 +292,13 @@ func buildParser() parser.Parser {
 	)
 	typedefDef := parser.Collect(typeDef, parser.Identifier())
 	constDef := parser.Collect(
-		typeDef, parser.Identifier(), parser.Symbol("="), constantValue)
+		typeDef, parser.Identifier(), parser.Symbol("="), constantValue,
+		parser.Any(
+			parser.Symbol(","),
+			parser.Symbol(";"),
+			parser.Symbol(""),
+		),
+	)
 	enumItemDef := parser.Collect(
 		parser.Identifier(),
 		parser.Any(
