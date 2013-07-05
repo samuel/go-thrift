@@ -160,5 +160,5 @@ func (c *clientCodec) ReadResponseBody(thriftStruct interface{}) error {
 }
 
 func (c *clientCodec) Close() error {
-	return nil
+	return c.transport.Close()
 }

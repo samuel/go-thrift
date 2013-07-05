@@ -87,5 +87,5 @@ func (c *serverCodec) WriteResponse(response *rpc.Response, thriftStruct interfa
 }
 
 func (c *serverCodec) Close() error {
-	return nil
+	return c.transport.Close()
 }
