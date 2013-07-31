@@ -14,7 +14,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/samuel/go-parser"
+	"github.com/samuel/go-parser/parser"
 )
 
 type Filesystem interface {
@@ -401,8 +401,8 @@ func (p *Parser) outputToThrift(obj parser.Output, includename string) (*Thrift,
 			thrift.Constants[val[1].(string)] = &Constant{val[1].(string), &Type{Name: val[0].(string)}, val[3]}
 		case "enum":
 			en := &Enum{
-				Name:   val[0].(string),
-				Values: make(map[string]*EnumValue),
+				Name:        val[0].(string),
+				Values:      make(map[string]*EnumValue),
 				IncludeName: includename,
 			}
 			next := 0
@@ -423,14 +423,14 @@ func (p *Parser) outputToThrift(obj parser.Output, includename string) (*Thrift,
 			thrift.Enums[en.Name] = en
 		case "struct":
 			thrift.Structs[val[0].(string)] = &Struct{
-				Name:   val[0].(string),
-				Fields: parseFields(val[2].([]interface{}), includename),
+				Name:        val[0].(string),
+				Fields:      parseFields(val[2].([]interface{}), includename),
 				IncludeName: includename,
 			}
 		case "exception":
 			thrift.Exceptions[val[0].(string)] = &Struct{
-				Name:   val[0].(string),
-				Fields: parseFields(val[2].([]interface{}), includename),
+				Name:        val[0].(string),
+				Fields:      parseFields(val[2].([]interface{}), includename),
 				IncludeName: includename,
 			}
 		case "service":
