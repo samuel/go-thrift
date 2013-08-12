@@ -148,13 +148,24 @@ func (g *GoGenerator) formatReturnType(typ *parser.Type) string {
 
 func (g *GoGenerator) writeConstant(out io.Writer, c *parser.Constant) error {
   ctype := g.formatType(c.Type)
+// type like map/list cannot be const
 if strings.HasPrefix(ctype,"map") || strings.HasPrefix(ctype,"list") || strings.HasPrefix(ctype,"set"){
+ // if original name is not of map/list then we use the typedefd name
+ if  !strings.HasPrefix(c.Type.Name,"map") && !strings.HasPrefix(c.Type.Name,"list") && !strings.HasPrefix(c.Type.Name,"set") {
 
-	return g.write(out, "\nvar %s = %s %+v\n", camelCase(c.Name), g.formatType(c.Type), c.Value)
+	return g.write(out, "\nvar %s = %s%+v\n", camelCase(c.Name), camelCase(c.Type.Name), c.Value)
+} else {
+	return g.write(out, "\nvar %s = %s%+v\n", camelCase(c.Name), g.formatType(c.Type), c.Value)
+}
+
  } else {
 	return g.write(out, "\nconst %s %s = %+v\n", camelCase(c.Name), g.formatType(c.Type), c.Value)
 }
 return nil;
+}
+
+func (g *GoGenerator) writeTypedef(out io.Writer, key string, c *parser.Type) error {
+	return g.write(out, "\ntype %s %s\n", camelCase(key), g.formatType(c))
 }
 
 func (g *GoGenerator) writeEnum(out io.Writer, enum *parser.Enum) error {
@@ -440,6 +451,13 @@ func (g *GoGenerator) Generate(name string, out io.Writer) (err error) {
 	}
 
 	//
+
+	for _, k := range sortedKeys(g.Thrift.Typedefs) {
+		c := g.Thrift.Typedefs[k]
+		if err := g.writeTypedef(out, k, c); err != nil {
+			return err
+		}
+	}
 
 	for _, k := range sortedKeys(g.Thrift.Constants) {
 		c := g.Thrift.Constants[k]
