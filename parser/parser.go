@@ -408,7 +408,7 @@ func buildParser() parser.Parser {
 	return thriftSpec
 }
 
-func (p *Parser) outputToThrift(obj parser.Output, includename string) (*Thrift, error) {
+func (p *Parser) outputToThrift(obj parser.Output, includename, dir string) (*Thrift, error) {
 	thrift := &Thrift{
 		Namespaces: make(map[string]string),
 		Typedefs:   make(map[string]*Type),
@@ -499,7 +499,8 @@ func (p *Parser) outputToThrift(obj parser.Output, includename string) (*Thrift,
 			filename := val[0].(string)
 			filename = filename[1 : len(filename)-1]
 			newincludename := strings.Split(filepath.Base(filename), ".")[0]
-			tr, err := p.ParseFile(filename, newincludename)
+			newpath := filepath.Join(dir,filename)
+			tr, err := p.ParseFile(newpath, newincludename)
 			if err != nil {
 				return nil, err
 			}
@@ -511,7 +512,7 @@ func (p *Parser) outputToThrift(obj parser.Output, includename string) (*Thrift,
 	return thrift, nil
 }
 
-func (p *Parser) Parse(r io.Reader, includename string) (*Thrift, error) {
+func (p *Parser) Parse(r io.Reader, includename string, dir string) (*Thrift, error) {
 	b, err := ioutil.ReadAll(r)
 	if err != nil {
 		panic(err)
@@ -546,19 +547,24 @@ func (p *Parser) Parse(r io.Reader, includename string) (*Thrift, error) {
 		}
 	}
 
-	return p.outputToThrift(out, includename)
+	return p.outputToThrift(out, includename, dir)
 }
 
 func (p *Parser) ParseFile(filename, includename string) (*Thrift, error) {
 	var r io.ReadCloser
 	var err error
+	abs, err := filepath.Abs(filename)
+
+	if err != nil {
+		return nil, err
+	}
+	dir := filepath.Dir(abs)
+
 	if p.Filesystem != nil {
 		r, err = p.Filesystem.Open(filename)
 	} else {
-		filename, err = filepath.Abs(filename)
-		if err != nil {
-			return nil, err
-		}
+		filename = abs
+		
 		filename = filepath.Clean(filename)
 		r, err = os.Open(filename)
 	}
@@ -567,5 +573,5 @@ func (p *Parser) ParseFile(filename, includename string) (*Thrift, error) {
 	}
 	defer r.Close()
 
-	return p.Parse(r, includename)
+	return p.Parse(r, includename, dir)
 }
