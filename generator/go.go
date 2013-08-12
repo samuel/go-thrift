@@ -147,7 +147,14 @@ func (g *GoGenerator) formatReturnType(typ *parser.Type) string {
 }
 
 func (g *GoGenerator) writeConstant(out io.Writer, c *parser.Constant) error {
-	return g.write(out, "\nconst %s = %+v\n", camelCase(c.Name), c.Value)
+  ctype := g.formatType(c.Type)
+if strings.HasPrefix(ctype,"map") || strings.HasPrefix(ctype,"list") || strings.HasPrefix(ctype,"set"){
+
+	return g.write(out, "\nvar %s = %s %+v\n", camelCase(c.Name), g.formatType(c.Type), c.Value)
+ } else {
+	return g.write(out, "\nconst %s %s = %+v\n", camelCase(c.Name), g.formatType(c.Type), c.Value)
+}
+return nil;
 }
 
 func (g *GoGenerator) writeEnum(out io.Writer, enum *parser.Enum) error {

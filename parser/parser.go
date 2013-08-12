@@ -14,7 +14,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/samuel/go-parser"
+	"github.com/samuel/go-parser/parser"
 )
 
 type Filesystem interface {
@@ -111,6 +111,37 @@ func quotedString() parser.Parser {
 	}
 }
 
+func mapConstant() parser.Parser {
+	return func(st *parser.State) (parser.Output, bool, error) {
+		next, err := st.Input.Next()
+		if err != nil || next != '{' {
+			return nil, false, err
+		}
+
+		st.Input.Pop(1)
+
+		runes := make([]rune, 1, 8)
+		runes[0] = '{'
+		for {
+			next, err := st.Input.Next()
+			if err != nil {
+				return nil, false, err
+			}
+			st.Input.Pop(1)
+			
+				
+					runes = append(runes, next)
+				
+
+				if next == '}' {
+					break
+				}
+			
+		}
+
+		return string(runes), true, nil
+	}
+}
 func integer() parser.Parser {
 	return func(st *parser.State) (parser.Output, bool, error) {
 		next, err := st.Input.Next()
@@ -264,7 +295,7 @@ func parseFields(fi []interface{}, includename string) []*Field {
 }
 
 func buildParser() parser.Parser {
-	constantValue := parser.Lexeme(parser.Any(quotedString(), integer(), float()))
+	constantValue := parser.Lexeme(parser.Any(mapConstant(),quotedString(), integer(), float()))
 	namespaceDef := parser.Collect(
 		parser.Identifier(), parser.Identifier())
 	includeDef := parser.Collect(
@@ -398,7 +429,7 @@ func (p *Parser) outputToThrift(obj parser.Output, includename string) (*Thrift,
 		case "typedef":
 			thrift.Typedefs[val[1].(string)] = parseType(val[0], includename)
 		case "const":
-			thrift.Constants[val[1].(string)] = &Constant{val[1].(string), &Type{Name: val[0].(string)}, val[3]}
+			thrift.Constants[val[1].(string)] = &Constant{val[1].(string), parseType(val[0], includename), val[3]}
 		case "enum":
 			en := &Enum{
 				Name:   val[0].(string),
