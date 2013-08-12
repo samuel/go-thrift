@@ -467,7 +467,7 @@ func (p *Parser) outputToThrift(obj parser.Output, includename string) (*Thrift,
 		case "include":
 			filename := val[0].(string)
 			filename = filename[1 : len(filename)-1]
-			newincludename := strings.Split(filename, ".")[0]
+			newincludename := strings.Split(filepath.Base(filename), ".")[0]
 			tr, err := p.ParseFile(filename, newincludename)
 			if err != nil {
 				return nil, err
