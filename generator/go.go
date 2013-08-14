@@ -165,6 +165,10 @@ return nil;
 }
 
 func (g *GoGenerator) writeTypedef(out io.Writer, key string, c *parser.Type) error {
+	if strings.ContainsAny(key,".") {
+		parts := strings.Split(key, ".")
+		key = parts[len(parts)-1]
+	}
 	return g.write(out, "\ntype %s %s\n", camelCase(key), g.formatType(c))
 }
 
