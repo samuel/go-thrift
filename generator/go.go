@@ -21,6 +21,7 @@ var (
 	f_go_binarystring = flag.Bool("go.binarystring", false, "Always use string for binary instead of []byte")
 	f_go_json_enumnum = flag.Bool("go.json.enumnum", false, "For JSON marshal enums by number instead of name")
 	f_go_packagename  = flag.String("go.packagename", "", "Override the package name")
+	f_go_import  = flag.String("go.import", "", "add a custom import")
 	f_go_pointers     = flag.Bool("go.pointers", false, "Make all fields pointers")
 )
 
@@ -153,6 +154,7 @@ if strings.HasPrefix(ctype,"map") || strings.HasPrefix(ctype,"list") || strings.
  // if original name is not of map/list then we use the typedefd name
  if  !strings.HasPrefix(c.Type.Name,"map") && !strings.HasPrefix(c.Type.Name,"list") && !strings.HasPrefix(c.Type.Name,"set") {
 
+
 	return g.write(out, "\nvar %s = %s%+v\n", camelCase(c.Name), camelCase(c.Type.Name), c.Value)
 } else {
 	return g.write(out, "\nvar %s = %s%+v\n", camelCase(c.Name), g.formatType(c.Type), c.Value)
@@ -165,6 +167,7 @@ return nil;
 }
 
 func (g *GoGenerator) writeTypedef(out io.Writer, key string, c *parser.Type) error {
+	/* go-thrift does include all includes so, split all package prefixes */
 	if strings.ContainsAny(key,".") {
 		parts := strings.Split(key, ".")
 		key = parts[len(parts)-1]
@@ -445,6 +448,9 @@ func (g *GoGenerator) Generate(name string, out io.Writer) (err error) {
 	}
 	if len(g.Thrift.Enums) > 0 || len(g.Thrift.Exceptions) > 0 {
 		imports = append(imports, "fmt")
+	}
+		if len(*f_go_import) > 0 {
+		imports = append(imports,*f_go_import)
 	}
 	if len(imports) > 0 {
 		g.write(out, "\nimport (\n")
