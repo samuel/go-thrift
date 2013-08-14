@@ -18,9 +18,9 @@ import (
 )
 
 func camelCase(st string) string {
-	if strings.ToUpper(st) == st {
+	/*if strings.ToUpper(st) == st {
 		st = strings.ToLower(st)
-	}
+	}*/
 	return thrift.CamelCase(st)
 }
 
