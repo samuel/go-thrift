@@ -111,6 +111,37 @@ func quotedString() parser.Parser {
 	}
 }
 
+func mapConstant() parser.Parser {
+	return func(st *parser.State) (parser.Output, bool, error) {
+		next, err := st.Input.Next()
+		if err != nil || next != '{' {
+			return nil, false, err
+		}
+
+		st.Input.Pop(1)
+
+		runes := make([]rune, 1, 8)
+		runes[0] = '{'
+		for {
+			next, err := st.Input.Next()
+			if err != nil {
+				return nil, false, err
+			}
+			st.Input.Pop(1)
+			
+				
+					runes = append(runes, next)
+				
+
+				if next == '}' {
+					break
+				}
+			
+		}
+
+		return string(runes), true, nil
+	}
+}
 func integer() parser.Parser {
 	return func(st *parser.State) (parser.Output, bool, error) {
 		next, err := st.Input.Next()
@@ -264,7 +295,7 @@ func parseFields(fi []interface{}, includename string) []*Field {
 }
 
 func buildParser() parser.Parser {
-	constantValue := parser.Lexeme(parser.Any(quotedString(), integer(), float()))
+	constantValue := parser.Lexeme(parser.Any(mapConstant(),quotedString(), integer(), float()))
 	namespaceDef := parser.Collect(
 		parser.Identifier(), parser.Identifier())
 	includeDef := parser.Collect(
@@ -377,7 +408,7 @@ func buildParser() parser.Parser {
 	return thriftSpec
 }
 
-func (p *Parser) outputToThrift(obj parser.Output, includename string) (*Thrift, error) {
+func (p *Parser) outputToThrift(obj parser.Output, includename, dir string) (*Thrift, error) {
 	thrift := &Thrift{
 		Namespaces: make(map[string]string),
 		Typedefs:   make(map[string]*Type),
@@ -398,7 +429,7 @@ func (p *Parser) outputToThrift(obj parser.Output, includename string) (*Thrift,
 		case "typedef":
 			thrift.Typedefs[val[1].(string)] = parseType(val[0], includename)
 		case "const":
-			thrift.Constants[val[1].(string)] = &Constant{val[1].(string), &Type{Name: val[0].(string)}, val[3]}
+			thrift.Constants[val[1].(string)] = &Constant{val[1].(string), parseType(val[0], includename), val[3]}
 		case "enum":
 			en := &Enum{
 				Name:        val[0].(string),
@@ -467,8 +498,9 @@ func (p *Parser) outputToThrift(obj parser.Output, includename string) (*Thrift,
 		case "include":
 			filename := val[0].(string)
 			filename = filename[1 : len(filename)-1]
-			newincludename := strings.Split(filename, ".")[0]
-			tr, err := p.ParseFile(filename, newincludename)
+			newincludename := strings.Split(filepath.Base(filename), ".")[0]
+			newpath := filepath.Join(dir,filename)
+			tr, err := p.ParseFile(newpath, newincludename)
 			if err != nil {
 				return nil, err
 			}
@@ -480,7 +512,7 @@ func (p *Parser) outputToThrift(obj parser.Output, includename string) (*Thrift,
 	return thrift, nil
 }
 
-func (p *Parser) Parse(r io.Reader, includename string) (*Thrift, error) {
+func (p *Parser) Parse(r io.Reader, includename string, dir string) (*Thrift, error) {
 	b, err := ioutil.ReadAll(r)
 	if err != nil {
 		panic(err)
@@ -515,19 +547,24 @@ func (p *Parser) Parse(r io.Reader, includename string) (*Thrift, error) {
 		}
 	}
 
-	return p.outputToThrift(out, includename)
+	return p.outputToThrift(out, includename, dir)
 }
 
 func (p *Parser) ParseFile(filename, includename string) (*Thrift, error) {
 	var r io.ReadCloser
 	var err error
+	abs, err := filepath.Abs(filename)
+
+	if err != nil {
+		return nil, err
+	}
+	dir := filepath.Dir(abs)
+
 	if p.Filesystem != nil {
 		r, err = p.Filesystem.Open(filename)
 	} else {
-		filename, err = filepath.Abs(filename)
-		if err != nil {
-			return nil, err
-		}
+		filename = abs
+		
 		filename = filepath.Clean(filename)
 		r, err = os.Open(filename)
 	}
@@ -536,5 +573,5 @@ func (p *Parser) ParseFile(filename, includename string) (*Thrift, error) {
 	}
 	defer r.Close()
 
-	return p.Parse(r, includename)
+	return p.Parse(r, includename, dir)
 }
