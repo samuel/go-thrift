@@ -16,7 +16,10 @@ func main() {
 
 	client := thrift.NewClient(thrift.NewFramedReadWriteCloser(conn, 0), thrift.NewBinaryProtocol(true, false), false)
 	scr := scribe.ScribeClient{client}
-	res, err := scr.Log([]*scribe.LogEntry{{"category", "message"}})
+	res, err := scr.Log([]*scribe.LogEntry{
+		{"category", "message"},
+		{"apple", "banana"},
+	})
 	if err != nil {
 		panic(err)
 	}
