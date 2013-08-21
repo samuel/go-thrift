@@ -169,12 +169,30 @@ func (e *encoder) writeValue(v reflect.Value, thriftType byte) {
 			err = e.p.WriteSetEnd(e.w)
 		} else if v.Type().Kind() == reflect.Map {
 			elemType := v.Type().Key()
+			valueType := v.Type().Elem()
 			elemThriftType := fieldType(elemType)
-			if er := e.p.WriteSetBegin(e.w, elemThriftType, v.Len()); er != nil {
-				e.error(er)
-			}
-			for _, k := range v.MapKeys() {
-				e.writeValue(k, elemThriftType)
+			if valueType.Kind() == reflect.Bool {
+				n := 0
+				for _, k := range v.MapKeys() {
+					if v.MapIndex(k).Bool() {
+						n++
+					}
+				}
+				if er := e.p.WriteSetBegin(e.w, elemThriftType, n); er != nil {
+					e.error(er)
+				}
+				for _, k := range v.MapKeys() {
+					if v.MapIndex(k).Bool() {
+						e.writeValue(k, elemThriftType)
+					}
+				}
+			} else {
+				if er := e.p.WriteSetBegin(e.w, elemThriftType, v.Len()); er != nil {
+					e.error(er)
+				}
+				for _, k := range v.MapKeys() {
+					e.writeValue(k, elemThriftType)
+				}
 			}
 			err = e.p.WriteSetEnd(e.w)
 		} else {

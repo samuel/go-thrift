@@ -10,9 +10,9 @@ import (
 )
 
 type EncodeFieldsTestStruct struct {
-	F1  string                 `json:"f1" thrift:"1"`
-	F2  string                 `thrift:"2" json:"f2"`
-	Set map[string]interface{} `thrift:"3"`
+	F1  string              `json:"f1" thrift:"1"`
+	F2  string              `thrift:"2" json:"f2"`
+	Set map[string]struct{} `thrift:"3"`
 }
 
 func TestEncodeFields(t *testing.T) {
@@ -22,6 +22,6 @@ func TestEncodeFields(t *testing.T) {
 		t.Fatalf("Did not find all fields. %d fields, expected 3 fields", len(m.fields))
 	}
 	if m.fields[3].fieldType != TypeSet {
-		t.Fatalf("Type map[...]interface{} not handled as a Set")
+		t.Fatalf("Type map[...]struct{} not handled as a Set")
 	}
 }

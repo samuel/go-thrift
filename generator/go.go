@@ -108,7 +108,7 @@ func (g *GoGenerator) formatType(pkg string, thrift *parser.Thrift, typ *parser.
 		if valueType == "[]byte" {
 			valueType = "string"
 		}
-		return "map[" + valueType + "]interface{}"
+		return "map[" + valueType + "]struct{}"
 	case "list":
 		return "[]" + g.formatType(pkg, thrift, typ.ValueType, false)
 	case "map":

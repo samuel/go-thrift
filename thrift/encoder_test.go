@@ -53,16 +53,16 @@ func (s *IntSet) DecodeThrift(r io.Reader, p Protocol) error {
 }
 
 type TestStruct struct {
-	String  string                 `thrift:"1"`
-	Int     *int                   `thrift:"2"`
-	List    []string               `thrift:"3"`
-	Map     map[string]string      `thrift:"4"`
-	Struct  *TestStruct2           `thrift:"5"`
-	List2   []*string              `thrift:"6"`
-	Struct2 TestStruct2            `thrift:"7"`
-	Binary  []byte                 `thrift:"8"`
-	Set     []string               `thrift:"9,set"`
-	Set2    map[string]interface{} `thrift:"10"`
+	String  string              `thrift:"1"`
+	Int     *int                `thrift:"2"`
+	List    []string            `thrift:"3"`
+	Map     map[string]string   `thrift:"4"`
+	Struct  *TestStruct2        `thrift:"5"`
+	List2   []*string           `thrift:"6"`
+	Struct2 TestStruct2         `thrift:"7"`
+	Binary  []byte              `thrift:"8"`
+	Set     []string            `thrift:"9,set"`
+	Set2    map[string]struct{} `thrift:"10"`
 }
 
 type TestStructRequiredOptional struct {
@@ -144,7 +144,7 @@ func TestBasics(t *testing.T) {
 		ts2,
 		[]byte{1, 2, 3},
 		[]string{"a", "b"},
-		map[string]interface{}{"q": true, "e": true},
+		map[string]struct{}{"i": struct{}{}, "o": struct{}{}},
 	}
 	buf := &bytes.Buffer{}
 

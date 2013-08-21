@@ -115,7 +115,7 @@ func fieldType(t reflect.Type) byte {
 		return TypeDouble
 	case reflect.Map:
 		valueType := t.Elem()
-		if valueType.Kind() == reflect.Interface && valueType.Name() == "" {
+		if valueType.Kind() == reflect.Struct && valueType.Name() == "" && valueType.NumField() == 0 {
 			return TypeSet
 		}
 		return TypeMap

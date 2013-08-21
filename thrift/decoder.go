@@ -224,6 +224,7 @@ func (d *decoder) readValue(thriftType byte, rf reflect.Value) {
 			}
 		} else if v.Type().Kind() == reflect.Map {
 			elemType := v.Type().Key()
+			valueType := v.Type().Elem()
 			et, n, err := d.p.ReadSetBegin(d.r)
 			if err != nil {
 				d.error(err)
@@ -232,7 +233,12 @@ func (d *decoder) readValue(thriftType byte, rf reflect.Value) {
 			for i := 0; i < n; i++ {
 				key := reflect.New(elemType).Elem()
 				d.readValue(et, key)
-				v.SetMapIndex(key, reflect.ValueOf(true))
+				switch valueType.Kind() {
+				case reflect.Bool:
+					v.SetMapIndex(key, reflect.ValueOf(true))
+				default:
+					v.SetMapIndex(key, reflect.Zero(valueType))
+				}
 			}
 			if err := d.p.ReadSetEnd(d.r); err != nil {
 				d.error(err)
