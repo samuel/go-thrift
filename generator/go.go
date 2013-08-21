@@ -8,9 +8,13 @@ package main
 // - Default arguments. Possibly don't bother...
 
 import (
+	"bytes"
 	"flag"
 	"fmt"
+	"go/format"
 	"io"
+	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 
@@ -25,17 +29,27 @@ var (
 )
 
 var (
-	goNamespaceOrder = []string{"go", "perl", "py"}
+	goNamespaceOrder = []string{"go", "perl", "py", "cpp"}
 )
 
 type ErrUnknownType string
 
 func (e ErrUnknownType) Error() string {
-	return fmt.Sprintf("{ErrUnknownType %s}", string(e))
+	return fmt.Sprintf("Unknown type %s", string(e))
+}
+
+type ErrMissingInclude string
+
+func (e ErrMissingInclude) Error() string {
+	return fmt.Sprintf("Missing include %s", string(e))
 }
 
 type GoGenerator struct {
-	Thrift *parser.Thrift
+	thrift *parser.Thrift
+	pkg    string
+
+	ThriftFiles map[string]*parser.Thrift
+	Packages    map[string]string
 }
 
 func (g *GoGenerator) error(err error) {
@@ -50,9 +64,27 @@ func (g *GoGenerator) write(w io.Writer, f string, a ...interface{}) error {
 	return nil
 }
 
-func (g *GoGenerator) formatType(typ *parser.Type) string {
+func (g *GoGenerator) formatType(pkg string, thrift *parser.Thrift, typ *parser.Type, optional bool) string {
+	if strings.Contains(typ.Name, ".") {
+		parts := strings.SplitN(typ.Name, ".", 2)
+		thriftFilename := thrift.Includes[parts[0]]
+		if thriftFilename == "" {
+			g.error(ErrMissingInclude(parts[0]))
+		}
+		thrift = g.ThriftFiles[thriftFilename]
+		if thrift == nil {
+			g.error(ErrMissingInclude(thriftFilename))
+		}
+		pkg = g.Packages[thriftFilename]
+		typ = &parser.Type{
+			Name:      parts[1],
+			KeyType:   typ.KeyType,
+			ValueType: typ.ValueType,
+		}
+	}
+
 	ptr := ""
-	if *f_go_pointers {
+	if *f_go_pointers || optional {
 		ptr = "*"
 	}
 	switch typ.Name {
@@ -72,49 +104,46 @@ func (g *GoGenerator) formatType(typ *parser.Type) string {
 	case "double":
 		return ptr + "float64"
 	case "set":
-		valueType := g.formatType(typ.ValueType)
+		valueType := g.formatType(pkg, thrift, typ.ValueType, false)
 		if valueType == "[]byte" {
 			valueType = "string"
 		}
 		return "map[" + valueType + "]interface{}"
 	case "list":
-		return "[]" + g.formatType(typ.ValueType)
+		return "[]" + g.formatType(pkg, thrift, typ.ValueType, false)
 	case "map":
-		keyType := g.formatType(typ.KeyType)
+		keyType := g.formatType(pkg, thrift, typ.KeyType, false)
 		if keyType == "[]byte" {
 			// TODO: Log, warn, do something!
 			// println("key type of []byte not supported for maps")
 			keyType = "string"
 		}
-		return "map[" + keyType + "]" + g.formatType(typ.ValueType)
+		return "map[" + keyType + "]" + g.formatType(pkg, thrift, typ.ValueType, false)
 	}
 
-	if len(typ.IncludeName) > 0 {
-		if t := g.Thrift.Typedefs[typ.IncludeName+"."+typ.Name]; t != nil {
-			return g.formatType(t)
-		}
-		if e := g.Thrift.Enums[typ.IncludeName+"."+typ.Name]; e != nil {
-			return ptr + e.Name
-		}
-		if s := g.Thrift.Structs[typ.IncludeName+"."+typ.Name]; s != nil {
-			return "*" + s.Name
-		}
-		if e := g.Thrift.Exceptions[typ.IncludeName+"."+typ.Name]; e != nil {
-			return "*" + e.Name
-		}
+	if t := thrift.Typedefs[typ.Name]; t != nil {
+		return g.formatType(pkg, thrift, t, optional)
 	}
-
-	if t := g.Thrift.Typedefs[typ.Name]; t != nil {
-		return g.formatType(t)
+	if e := thrift.Enums[typ.Name]; e != nil {
+		name := e.Name
+		if pkg != g.pkg {
+			name = pkg + "." + name
+		}
+		return ptr + name
 	}
-	if e := g.Thrift.Enums[typ.Name]; e != nil {
-		return ptr + e.Name
+	if s := thrift.Structs[typ.Name]; s != nil {
+		name := s.Name
+		if pkg != g.pkg {
+			name = pkg + "." + name
+		}
+		return "*" + name
 	}
-	if s := g.Thrift.Structs[typ.Name]; s != nil {
-		return "*" + s.Name
-	}
-	if e := g.Thrift.Exceptions[typ.Name]; e != nil {
-		return "*" + e.Name
+	if e := thrift.Exceptions[typ.Name]; e != nil {
+		name := e.Name
+		if pkg != g.pkg {
+			name = pkg + "." + name
+		}
+		return "*" + name
 	}
 
 	g.error(ErrUnknownType(typ.Name))
@@ -128,13 +157,13 @@ func (g *GoGenerator) formatField(field *parser.Field) string {
 	}
 	return fmt.Sprintf(
 		"%s %s `thrift:\"%d%s\" json:\"%s\"`",
-		camelCase(field.Name), g.formatType(field.Type), field.Id, tags, field.Name)
+		camelCase(field.Name), g.formatType(g.pkg, g.thrift, field.Type, field.Optional), field.Id, tags, field.Name)
 }
 
 func (g *GoGenerator) formatArguments(arguments []*parser.Field) string {
 	args := make([]string, len(arguments))
 	for i, arg := range arguments {
-		args[i] = fmt.Sprintf("%s %s", camelCase(arg.Name), g.formatType(arg.Type))
+		args[i] = fmt.Sprintf("%s %s", camelCase(arg.Name), g.formatType(g.pkg, g.thrift, arg.Type, arg.Optional))
 	}
 	return strings.Join(args, ", ")
 }
@@ -143,7 +172,7 @@ func (g *GoGenerator) formatReturnType(typ *parser.Type) string {
 	if typ == nil || typ.Name == "void" {
 		return "error"
 	}
-	return fmt.Sprintf("(%s, error)", g.formatType(typ))
+	return fmt.Sprintf("(%s, error)", g.formatType(g.pkg, g.thrift, typ, false))
 }
 
 func (g *GoGenerator) writeConstant(out io.Writer, c *parser.Constant) error {
@@ -260,6 +289,9 @@ func (g *GoGenerator) writeService(out io.Writer, svc *parser.Service) error {
 	// Service interface
 
 	g.write(out, "\ntype %s interface {\n", svcName)
+	if svc.Extends != "" {
+		g.write(out, "\t%s\n", camelCase(svc.Extends))
+	}
 	methodNames := sortedKeys(svc.Methods)
 	for _, k := range methodNames {
 		method := svc.Methods[k]
@@ -298,7 +330,7 @@ func (g *GoGenerator) writeService(out io.Writer, svc *parser.Service) error {
 		if len(method.Exceptions) > 0 {
 			g.write(out, "\tswitch e := err.(type) {\n")
 			for _, ex := range method.Exceptions {
-				g.write(out, "\tcase %s:\n\t\tres.%s = e\n\t\terr = nil\n", g.formatType(ex.Type), camelCase(ex.Name))
+				g.write(out, "\tcase %s:\n\t\tres.%s = e\n\t\terr = nil\n", g.formatType(g.pkg, g.thrift, ex.Type, false), camelCase(ex.Name))
 			}
 			g.write(out, "\t}\n")
 		}
@@ -312,7 +344,7 @@ func (g *GoGenerator) writeService(out io.Writer, svc *parser.Service) error {
 		// Request struct
 		method := svc.Methods[k]
 		reqStructName := svcName + camelCase(method.Name) + "Request"
-		if err := g.writeStruct(out, &parser.Struct{reqStructName, method.Arguments, ""}); err != nil {
+		if err := g.writeStruct(out, &parser.Struct{reqStructName, method.Arguments}); err != nil {
 			return err
 		}
 
@@ -327,7 +359,7 @@ func (g *GoGenerator) writeService(out io.Writer, svc *parser.Service) error {
 			for _, ex := range method.Exceptions {
 				args = append(args, ex)
 			}
-			res := &parser.Struct{svcName + camelCase(method.Name) + "Response", args, ""}
+			res := &parser.Struct{svcName + camelCase(method.Name) + "Response", args}
 			if err := g.writeStruct(out, res); err != nil {
 				return err
 			}
@@ -388,41 +420,29 @@ func (g *GoGenerator) writeService(out io.Writer, svc *parser.Service) error {
 	return nil
 }
 
-func (g *GoGenerator) Generate(name string, out io.Writer) (err error) {
-	defer func() {
-		if r := recover(); r != nil {
-			if _, ok := r.(runtime.Error); ok {
-				panic(r)
-			}
-			err = r.(error)
-		}
-	}()
+func (g *GoGenerator) generateSingle(out io.Writer, thriftPath string, thrift *parser.Thrift) {
+	packageName := g.Packages[thriftPath]
+	g.thrift = thrift
+	g.pkg = packageName
 
-	packageName := *f_go_packagename
-	if packageName == "" {
-		for _, k := range goNamespaceOrder {
-			packageName = g.Thrift.Namespaces[k]
-			if packageName != "" {
-				parts := strings.Split(packageName, ".")
-				packageName = parts[len(parts)-1]
-				break
-			}
-		}
-		if packageName == "" {
-			packageName = name
-		}
-	}
-	packageName = validIdentifier(strings.ToLower(packageName), "_")
 	g.write(out, "// This file is automatically generated. Do not modify.\n")
 	g.write(out, "\npackage %s\n", packageName)
 
 	// Imports
 	imports := []string{}
-	if len(g.Thrift.Enums) > 0 {
+	if len(thrift.Enums) > 0 {
 		imports = append(imports, "strconv")
 	}
-	if len(g.Thrift.Enums) > 0 || len(g.Thrift.Exceptions) > 0 {
+	if len(thrift.Enums) > 0 || len(thrift.Exceptions) > 0 {
 		imports = append(imports, "fmt")
+	}
+	if len(thrift.Includes) > 0 {
+		for _, path := range thrift.Includes {
+			pkg := g.Packages[path]
+			if pkg != packageName {
+				imports = append(imports, pkg)
+			}
+		}
 	}
 	if len(imports) > 0 {
 		g.write(out, "\nimport (\n")
@@ -434,45 +454,125 @@ func (g *GoGenerator) Generate(name string, out io.Writer) (err error) {
 
 	//
 
-	for _, k := range sortedKeys(g.Thrift.Constants) {
-		c := g.Thrift.Constants[k]
+	for _, k := range sortedKeys(thrift.Constants) {
+		c := thrift.Constants[k]
 		if err := g.writeConstant(out, c); err != nil {
-			return err
+			g.error(err)
 		}
 	}
 
-	for _, k := range sortedKeys(g.Thrift.Enums) {
-		enum := g.Thrift.Enums[k]
+	for _, k := range sortedKeys(thrift.Enums) {
+		enum := thrift.Enums[k]
 		if err := g.writeEnum(out, enum); err != nil {
-			return err
+			g.error(err)
 		}
 	}
 
-	for _, k := range sortedKeys(g.Thrift.Structs) {
-		st := g.Thrift.Structs[k]
+	for _, k := range sortedKeys(thrift.Structs) {
+		st := thrift.Structs[k]
 		if err := g.writeStruct(out, st); err != nil {
-			return err
+			g.error(err)
 		}
 	}
 
-	for _, k := range sortedKeys(g.Thrift.Exceptions) {
-		ex := g.Thrift.Exceptions[k]
+	for _, k := range sortedKeys(thrift.Exceptions) {
+		ex := thrift.Exceptions[k]
 		if err := g.writeException(out, ex); err != nil {
-			return err
+			g.error(err)
 		}
 	}
 
-	if len(g.Thrift.Services) > 0 {
+	if len(thrift.Services) > 0 {
 		g.write(out, "\ntype RPCClient interface {\n"+
 			"\tCall(method string, request interface{}, response interface{}) error\n"+
 			"}\n")
 	}
 
-	for _, k := range sortedKeys(g.Thrift.Services) {
-		svc := g.Thrift.Services[k]
+	for _, k := range sortedKeys(thrift.Services) {
+		svc := thrift.Services[k]
 		if err := g.writeService(out, svc); err != nil {
-			return err
+			g.error(err)
 		}
+	}
+}
+
+func (g *GoGenerator) Generate(outPath string) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			if _, ok := r.(runtime.Error); ok {
+				panic(r)
+			}
+			err = r.(error)
+		}
+	}()
+
+	// File out package namespaces if necessary
+	if g.Packages == nil {
+		g.Packages = make(map[string]string)
+	}
+	for path, th := range g.ThriftFiles {
+		if g.Packages[path] == "" {
+			packageName := *f_go_packagename
+			if packageName == "" {
+				for _, k := range goNamespaceOrder {
+					packageName = th.Namespaces[k]
+					if packageName != "" {
+						parts := strings.Split(packageName, ".")
+						packageName = parts[len(parts)-1]
+						break
+					}
+				}
+				if packageName == "" {
+					if ns := th.Namespaces["rb"]; ns != "" {
+						packageName = strings.Replace(ns, ".", "_", -1)
+					} else if ns := th.Namespaces["java"]; ns != "" {
+						packageName = strings.Replace(ns, ".", "_", -1)
+					}
+				}
+				if packageName == "" {
+					name := filepath.Base(path)
+					packageName = name
+				}
+			}
+			packageName = validIdentifier(strings.ToLower(packageName), "_")
+			g.Packages[path] = packageName
+		}
+	}
+
+	for path, th := range g.ThriftFiles {
+		pkg := g.Packages[path]
+		filename := strings.ToLower(filepath.Base(path))
+		for i := len(filename) - 1; i >= 0; i-- {
+			if filename[i] == '.' {
+				filename = filename[:i]
+			}
+		}
+		filename += ".go"
+		pkgpath := filepath.Join(outPath, pkg)
+		outfile := filepath.Join(pkgpath, filename)
+
+		if err := os.MkdirAll(pkgpath, 0755); err != nil && !os.IsExist(err) {
+			g.error(err)
+		}
+
+		out := &bytes.Buffer{}
+		g.generateSingle(out, path, th)
+
+		outBytes, err := format.Source(out.Bytes())
+		if err != nil {
+			g.error(err)
+		}
+
+		fi, err := os.OpenFile(outfile, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0644)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "%s\n", err.Error())
+			os.Exit(2)
+		}
+		if _, err := fi.Write(outBytes); err != nil {
+			fi.Close()
+			g.error(err)
+		}
+		fi.Close()
 	}
 
 	return nil

@@ -19,6 +19,7 @@ import (
 
 type Filesystem interface {
 	Open(filename string) (io.ReadCloser, error)
+	Abs(path string) (string, error)
 }
 
 type Parser struct {
@@ -216,8 +217,8 @@ func nilParser() parser.Parser {
 	}
 }
 
-func parseType(t interface{}, includename string) *Type {
-	typ := &Type{IncludeName: includename}
+func parseType(t interface{}) *Type {
+	typ := &Type{}
 	switch t2 := t.(type) {
 	case string:
 		if t2 == "void" {
@@ -227,10 +228,10 @@ func parseType(t interface{}, includename string) *Type {
 	case []interface{}:
 		typ.Name = t2[0].(string)
 		if typ.Name == "map" {
-			typ.KeyType = parseType(t2[2], includename)
-			typ.ValueType = parseType(t2[4], includename)
+			typ.KeyType = parseType(t2[2])
+			typ.ValueType = parseType(t2[4])
 		} else if typ.Name == "list" || typ.Name == "set" {
-			typ.ValueType = parseType(t2[2], includename)
+			typ.ValueType = parseType(t2[2])
 		} else {
 			panic("Basic type should never not be map or list: " + typ.Name)
 		}
@@ -240,7 +241,7 @@ func parseType(t interface{}, includename string) *Type {
 	return typ
 }
 
-func parseFields(fi []interface{}, includename string) []*Field {
+func parseFields(fi []interface{}) []*Field {
 	fields := make([]*Field, len(fi))
 	nextId := 1
 	for i, f := range fi {
@@ -255,7 +256,7 @@ func parseFields(fi []interface{}, includename string) []*Field {
 			nextId = field.Id + 1
 		}
 		field.Optional = strings.ToLower(parts[1].(string)) == "optional"
-		field.Type = parseType(parts[2], includename)
+		field.Type = parseType(parts[2])
 		field.Name = parts[3].(string)
 		field.Default = parts[4]
 		fields[i] = field
@@ -356,8 +357,13 @@ func buildParser() parser.Parser {
 		),
 		parser.Any(parser.Symbol(","), parser.Symbol(";"), parser.Symbol("")),
 	)
+	// <identifier> [extends <identifier>] { <*serviceMethodDef> }
 	serviceDef := parser.Collect(
 		parser.Identifier(),
+		parser.Any(
+			parser.Collect(parser.Symbol("extends"), parser.Identifier()),
+			nilParser(),
+		),
 		parser.Symbol("{"),
 		parser.Many(serviceMethodDef),
 		parser.Symbol("}"),
@@ -377,7 +383,7 @@ func buildParser() parser.Parser {
 	return thriftSpec
 }
 
-func (p *Parser) outputToThrift(obj parser.Output, includename string) (*Thrift, error) {
+func (p *Parser) outputToThrift(obj parser.Output) (*Thrift, error) {
 	thrift := &Thrift{
 		Namespaces: make(map[string]string),
 		Typedefs:   make(map[string]*Type),
@@ -386,7 +392,7 @@ func (p *Parser) outputToThrift(obj parser.Output, includename string) (*Thrift,
 		Structs:    make(map[string]*Struct),
 		Exceptions: make(map[string]*Struct),
 		Services:   make(map[string]*Service),
-		Includes:   make(map[string]*Thrift),
+		Includes:   make(map[string]string),
 	}
 
 	for _, symI := range obj.([]interface{}) {
@@ -396,14 +402,13 @@ func (p *Parser) outputToThrift(obj parser.Output, includename string) (*Thrift,
 		case "namespace":
 			thrift.Namespaces[strings.ToLower(val[0].(string))] = val[1].(string)
 		case "typedef":
-			thrift.Typedefs[val[1].(string)] = parseType(val[0], includename)
+			thrift.Typedefs[val[1].(string)] = parseType(val[0])
 		case "const":
 			thrift.Constants[val[1].(string)] = &Constant{val[1].(string), &Type{Name: val[0].(string)}, val[3]}
 		case "enum":
 			en := &Enum{
-				Name:        val[0].(string),
-				Values:      make(map[string]*EnumValue),
-				IncludeName: includename,
+				Name:   val[0].(string),
+				Values: make(map[string]*EnumValue),
 			}
 			next := 0
 			for _, e := range val[2].([]interface{}) {
@@ -423,31 +428,33 @@ func (p *Parser) outputToThrift(obj parser.Output, includename string) (*Thrift,
 			thrift.Enums[en.Name] = en
 		case "struct":
 			thrift.Structs[val[0].(string)] = &Struct{
-				Name:        val[0].(string),
-				Fields:      parseFields(val[2].([]interface{}), includename),
-				IncludeName: includename,
+				Name:   val[0].(string),
+				Fields: parseFields(val[2].([]interface{})),
 			}
 		case "exception":
 			thrift.Exceptions[val[0].(string)] = &Struct{
-				Name:        val[0].(string),
-				Fields:      parseFields(val[2].([]interface{}), includename),
-				IncludeName: includename,
+				Name:   val[0].(string),
+				Fields: parseFields(val[2].([]interface{})),
 			}
 		case "service":
 			s := &Service{
 				Name:    val[0].(string),
 				Methods: make(map[string]*Method),
 			}
-			for _, m := range val[2].([]interface{}) {
+			if val[1] != nil {
+				extends := val[1].([]interface{})
+				s.Extends = extends[1].(string)
+			}
+			for _, m := range val[3].([]interface{}) {
 				parts := m.([]interface{})
 				oneway := parts[0].(string) == "oneway"
-				returnType := parseType(parts[1], includename)
+				returnType := parseType(parts[1])
 				if oneway && returnType != nil {
 					return nil, errors.New("thrift: oneway methods must be void")
 				}
 				var exc []*Field = nil
 				if parts[6] != nil {
-					exc = parseFields((parts[6].([]interface{}))[2].([]interface{}), includename)
+					exc = parseFields((parts[6].([]interface{}))[2].([]interface{}))
 				} else {
 					exc = make([]*Field, 0)
 				}
@@ -458,7 +465,7 @@ func (p *Parser) outputToThrift(obj parser.Output, includename string) (*Thrift,
 					Name:       parts[2].(string),
 					Oneway:     oneway,
 					ReturnType: returnType,
-					Arguments:  parseFields(parts[4].([]interface{}), includename),
+					Arguments:  parseFields(parts[4].([]interface{})),
 					Exceptions: exc,
 				}
 				s.Methods[method.Name] = method
@@ -468,11 +475,7 @@ func (p *Parser) outputToThrift(obj parser.Output, includename string) (*Thrift,
 			filename := val[0].(string)
 			filename = filename[1 : len(filename)-1]
 			newincludename := strings.Split(filepath.Base(filename), ".")[0]
-			tr, err := p.ParseFile(filename, newincludename)
-			if err != nil {
-				return nil, err
-			}
-			thrift.Includes[newincludename] = tr
+			thrift.Includes[newincludename] = filename
 		default:
 			panic("Should never have an unhandled symbol: " + sym.symbol)
 		}
@@ -480,10 +483,10 @@ func (p *Parser) outputToThrift(obj parser.Output, includename string) (*Thrift,
 	return thrift, nil
 }
 
-func (p *Parser) Parse(r io.Reader, includename string) (*Thrift, error) {
+func (p *Parser) Parse(r io.Reader) (*Thrift, error) {
 	b, err := ioutil.ReadAll(r)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 
 	str := string(b)
@@ -515,26 +518,67 @@ func (p *Parser) Parse(r io.Reader, includename string) (*Thrift, error) {
 		}
 	}
 
-	return p.outputToThrift(out, includename)
+	return p.outputToThrift(out)
 }
 
-func (p *Parser) ParseFile(filename, includename string) (*Thrift, error) {
-	var r io.ReadCloser
-	var err error
-	if p.Filesystem != nil {
-		r, err = p.Filesystem.Open(filename)
-	} else {
-		filename, err = filepath.Abs(filename)
-		if err != nil {
-			return nil, err
-		}
-		filename = filepath.Clean(filename)
-		r, err = os.Open(filename)
-	}
-	if err != nil {
-		return nil, err
-	}
-	defer r.Close()
+func (p *Parser) ParseFile(filename string) (map[string]*Thrift, string, error) {
+	files := make(map[string]*Thrift)
 
-	return p.Parse(r, includename)
+	absPath, err := p.abs(filename)
+	if err != nil {
+		return nil, "", err
+	}
+	basePath := filepath.Dir(absPath)
+
+	path := absPath
+	for path != "" {
+		rd, err := p.open(path)
+		if err != nil {
+			return nil, "", err
+		}
+		thrift, err := p.Parse(rd)
+		if err != nil {
+			return nil, "", err
+		}
+		files[path] = thrift
+
+		for incName, incPath := range thrift.Includes {
+			p, err := p.abs(filepath.Join(basePath, incPath))
+			if err != nil {
+				return nil, "", err
+			}
+			thrift.Includes[incName] = p
+		}
+
+		// Find path for next unparsed include
+		path = ""
+		for _, th := range files {
+			for _, incPath := range th.Includes {
+				if files[incPath] == nil {
+					path = incPath
+					break
+				}
+			}
+		}
+	}
+
+	return files, absPath, nil
+}
+
+func (p *Parser) open(path string) (io.ReadCloser, error) {
+	if p.Filesystem == nil {
+		return os.Open(path)
+	}
+	return p.Filesystem.Open(path)
+}
+
+func (p *Parser) abs(path string) (string, error) {
+	if p.Filesystem == nil {
+		absPath, err := filepath.Abs(path)
+		if err != nil {
+			return "", err
+		}
+		return filepath.Clean(absPath), nil
+	}
+	return p.Filesystem.Abs(path)
 }

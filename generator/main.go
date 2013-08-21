@@ -79,20 +79,20 @@ func main() {
 	}
 
 	filename := flag.Arg(0)
-	outfilename := flag.Arg(1)
+	outpath := flag.Arg(1)
 
-	out := os.Stdout
-	if outfilename != "-" {
-		var err error
-		out, err = os.OpenFile(outfilename, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0644)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "%s\n", err.Error())
-			os.Exit(2)
-		}
-	}
+	// out := os.Stdout
+	// if outfilename != "-" {
+	// 	var err error
+	// 	out, err = os.OpenFile(outfilename, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0644)
+	// 	if err != nil {
+	// 		fmt.Fprintf(os.Stderr, "%s\n", err.Error())
+	// 		os.Exit(2)
+	// 	}
+	// }
 
 	p := &parser.Parser{}
-	th, err := p.ParseFile(filename, "")
+	parsedThrift, _, err := p.ParseFile(filename)
 	if e, ok := err.(*parser.ErrSyntaxError); ok {
 		fmt.Printf("%s\n", e.Left)
 		fmt.Fprintf(os.Stderr, "%s\n", err.Error())
@@ -102,17 +102,19 @@ func main() {
 		os.Exit(2)
 	}
 
-	fp := strings.Split(filename, "/")
-	name := strings.Split(fp[len(fp)-1], ".")[0]
+	// fp := strings.Split(filename, "/")
+	// name := strings.Split(fp[len(fp)-1], ".")[0]
 
-	generator := &GoGenerator{th.MergeIncludes()}
-	err = generator.Generate(name, out)
+	generator := &GoGenerator{
+		ThriftFiles: parsedThrift,
+	}
+	err = generator.Generate(outpath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%s\n", err.Error())
 		os.Exit(2)
 	}
 
-	if outfilename != "-" {
-		out.Close()
-	}
+	// if outfilename != "-" {
+	// 	out.Close()
+	// }
 }
