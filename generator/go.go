@@ -22,10 +22,9 @@ import (
 )
 
 var (
-	f_go_binarystring = flag.Bool("go.binarystring", false, "Always use string for binary instead of []byte")
-	f_go_json_enumnum = flag.Bool("go.json.enumnum", false, "For JSON marshal enums by number instead of name")
-	f_go_packagename  = flag.String("go.packagename", "", "Override the package name")
-	f_go_pointers     = flag.Bool("go.pointers", false, "Make all fields pointers")
+	flagGoBinarystring = flag.Bool("go.binarystring", false, "Always use string for binary instead of []byte")
+	flagGoJsonEnumnum  = flag.Bool("go.json.enumnum", false, "For JSON marshal enums by number instead of name")
+	flagGoPointers     = flag.Bool("go.pointers", false, "Make all fields pointers")
 )
 
 var (
@@ -84,14 +83,14 @@ func (g *GoGenerator) formatType(pkg string, thrift *parser.Thrift, typ *parser.
 	}
 
 	ptr := ""
-	if *f_go_pointers || optional {
+	if *flagGoPointers || optional {
 		ptr = "*"
 	}
 	switch typ.Name {
 	case "byte", "bool", "string":
 		return ptr + typ.Name
 	case "binary":
-		if *f_go_binarystring {
+		if *flagGoBinarystring {
 			return ptr + "string"
 		}
 		return "[]byte"
@@ -222,7 +221,7 @@ func (e %s) String() string {
 }
 `, enumName, enumName, enumName)
 
-	if !*f_go_json_enumnum {
+	if !*flagGoJsonEnumnum {
 		g.write(out, `
 func (e %s) MarshalJSON() ([]byte, error) {
 	name := %sByValue[e]
@@ -512,27 +511,25 @@ func (g *GoGenerator) Generate(outPath string) (err error) {
 	}
 	for path, th := range g.ThriftFiles {
 		if g.Packages[path] == "" {
-			packageName := *f_go_packagename
+			packageName := ""
+			for _, k := range goNamespaceOrder {
+				packageName = th.Namespaces[k]
+				if packageName != "" {
+					parts := strings.Split(packageName, ".")
+					packageName = parts[len(parts)-1]
+					break
+				}
+			}
 			if packageName == "" {
-				for _, k := range goNamespaceOrder {
-					packageName = th.Namespaces[k]
-					if packageName != "" {
-						parts := strings.Split(packageName, ".")
-						packageName = parts[len(parts)-1]
-						break
-					}
+				if ns := th.Namespaces["rb"]; ns != "" {
+					packageName = strings.Replace(ns, ".", "_", -1)
+				} else if ns := th.Namespaces["java"]; ns != "" {
+					packageName = strings.Replace(ns, ".", "_", -1)
 				}
-				if packageName == "" {
-					if ns := th.Namespaces["rb"]; ns != "" {
-						packageName = strings.Replace(ns, ".", "_", -1)
-					} else if ns := th.Namespaces["java"]; ns != "" {
-						packageName = strings.Replace(ns, ".", "_", -1)
-					}
-				}
-				if packageName == "" {
-					name := filepath.Base(path)
-					packageName = name
-				}
+			}
+			if packageName == "" {
+				name := filepath.Base(path)
+				packageName = name
 			}
 			packageName = validIdentifier(strings.ToLower(packageName), "_")
 			g.Packages[path] = packageName
