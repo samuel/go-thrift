@@ -41,7 +41,7 @@ func (c *serverCodec) ReadRequestHeader(request *rpc.Request) error {
 	}
 	request.Seq = uint64(seq)
 
-	if messageType != messageTypeCall { // Currently don't support one way
+	if messageType != MessageTypeCall { // Currently don't support one way
 		return errors.New("thrift: exception Call message type")
 	}
 
@@ -62,9 +62,9 @@ func (c *serverCodec) ReadRequestBody(thriftStruct interface{}) error {
 }
 
 func (c *serverCodec) WriteResponse(response *rpc.Response, thriftStruct interface{}) error {
-	mtype := byte(messageTypeReply)
+	mtype := byte(MessageTypeReply)
 	if response.Error != "" {
-		mtype = messageTypeException
+		mtype = MessageTypeException
 		etype := int32(ExceptionInternalError)
 		if strings.HasPrefix(response.Error, "rpc: can't find") {
 			etype = ExceptionUnknownMethod

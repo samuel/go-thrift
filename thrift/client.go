@@ -78,7 +78,7 @@ func NewClientCodec(conn io.ReadWriteCloser, protocol Protocol, supportOnewayReq
 }
 
 func (c *clientCodec) WriteRequest(request *rpc.Request, thriftStruct interface{}) error {
-	if err := c.protocol.WriteMessageBegin(c.transport, request.ServiceMethod, messageTypeCall, int32(request.Seq)); err != nil {
+	if err := c.protocol.WriteMessageBegin(c.transport, request.ServiceMethod, MessageTypeCall, int32(request.Seq)); err != nil {
 		return err
 	}
 	if err := EncodeStruct(c.transport, c.protocol, thriftStruct); err != nil {
@@ -134,7 +134,7 @@ func (c *clientCodec) ReadResponseHeader(response *rpc.Response) error {
 	}
 	response.ServiceMethod = name
 	response.Seq = uint64(seq)
-	if messageType == messageTypeException {
+	if messageType == MessageTypeException {
 		exception := &ApplicationException{}
 		if err := DecodeStruct(c.transport, c.protocol, exception); err != nil {
 			return err

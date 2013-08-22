@@ -29,10 +29,10 @@ const (
 )
 
 const (
-	messageTypeCall      = 1
-	messageTypeReply     = 2
-	messageTypeException = 3
-	messageTypeOneway    = 4
+	MessageTypeCall      = 1
+	MessageTypeReply     = 2
+	MessageTypeException = 3
+	MessageTypeOneway    = 4
 )
 
 const (
