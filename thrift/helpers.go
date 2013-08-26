@@ -12,6 +12,14 @@ func Float64(v float64) *float64 {
 	return &v
 }
 
+func Byte(v byte) *byte {
+	return &v
+}
+
+func Int16(v int16) *int16 {
+	return &v
+}
+
 func Int32(v int32) *int32 {
 	return &v
 }
