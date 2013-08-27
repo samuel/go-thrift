@@ -151,12 +151,15 @@ func (g *GoGenerator) formatType(pkg string, thrift *parser.Thrift, typ *parser.
 
 func (g *GoGenerator) formatField(field *parser.Field) string {
 	tags := ""
+	jsonTags := ""
 	if !field.Optional {
 		tags = ",required"
+	} else {
+		jsonTags = ",omitempty"
 	}
 	return fmt.Sprintf(
-		"%s %s `thrift:\"%d%s\" json:\"%s\"`",
-		camelCase(field.Name), g.formatType(g.pkg, g.thrift, field.Type, field.Optional), field.Id, tags, field.Name)
+		"%s %s `thrift:\"%d%s\" json:\"%s%s\"`",
+		camelCase(field.Name), g.formatType(g.pkg, g.thrift, field.Type, field.Optional), field.Id, tags, field.Name, jsonTags)
 }
 
 func (g *GoGenerator) formatArguments(arguments []*parser.Field) string {
