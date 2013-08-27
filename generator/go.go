@@ -249,6 +249,94 @@ func (e *%s) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// If the type is of the form include.Type then follow the includes to their destination
+// Return the actual type, thrift containing the type, and the name of the package with the type
+// func (g *GoGenerator) resolveType(typ *parser.Type, thrift *parser.Thrift) (*parser.Type, *parser.Thrift, string) {
+// 	if strings.Contains(typ.Name, ".") {
+// 		parts := strings.SplitN(typ.Name, ".", 2)
+// 		thriftFilename := thrift.Includes[parts[0]]
+// 		if thriftFilename == "" {
+// 			g.error(ErrMissingInclude(parts[0]))
+// 		}
+// 		thrift = g.ThriftFiles[thriftFilename]
+// 		if thrift == nil {
+// 			g.error(ErrMissingInclude(thriftFilename))
+// 		}
+// 		pkg := g.Packages[thriftFilename]
+// 		typ = &parser.Type{
+// 			Name:      parts[1],
+// 			KeyType:   typ.KeyType,
+// 			ValueType: typ.ValueType,
+// 		}
+
+// 		// if t := thrift.Typedefs[typ.Name]; t != nil {
+// 		// 	return g.resolveType(t, thrift)
+// 		// }
+
+// 		return typ, thrift, pkg
+// 	}
+// 	return typ, thrift, ""
+// }
+
+// func (g *GoGenerator) writeEncoder(out io.Writer, deref, variableName string, typ *parser.Type) error {
+// 	writer := func(typ string) {
+// 		g.write(out, "\tif err := pr.Write%s(wr, %s%s); err != nil { return err }\n", typ, deref, variableName)
+// 	}
+// 	switch typ.Name {
+// 	default:
+// 		typ, thrift, pkg := g.resolveType(typ, g.thrift)
+
+// 		// fmt.Printf("%+v %+v %+v\n", typ, thrift, pkg)
+// 		_ = pkg
+
+// 		if e := thrift.Enums[typ.Name]; e != nil {
+// 			writer("I32")
+// 		} else if s := thrift.Structs[typ.Name]; s != nil {
+// 			g.write(out, "\tif err := %s.EncodeThrift(wr, pr); err != nil { return err }\n", variableName)
+// 		} else if e := thrift.Exceptions[typ.Name]; e != nil {
+// 			g.write(out, "\tif err := %s.EncodeThrift(wr, pr); err != nil { return err }\n", variableName)
+// 		} else if t := thrift.Typedefs[typ.Name]; t != nil {
+// 			g.writeEncoder(out, deref, variableName, t)
+// 		} else {
+// 			g.error(ErrUnknownType(typ.Name))
+// 		}
+// 	case "bool":
+// 		writer("Bool")
+// 	case "byte":
+// 		writer("Byte")
+// 	case "i64":
+// 		writer("I64")
+// 	case "i32":
+// 		writer("I32")
+// 	case "i16":
+// 		writer("I16")
+// 	case "double":
+// 		writer("Double")
+// 	case "string":
+// 		writer("String")
+// 	case "map":
+// 		g.write(out, "\tif err := pr.WriteMapBegin(wr, %d, %d, len(%s)); err != nil { return err }\n", 0 /* TODO: key type */, 0 /* TODO: value type */, variableName)
+// 		g.write(out, "\t\tfor _, val := range %s {\n", variableName)
+// 		// TODO
+// 		g.write(out, "\t\t}\n")
+// 		g.write(out, "\tif err := pr.WriteMapEnd(wr); err != nil { return err }\n")
+// 	case "list":
+// 		g.write(out, "\tif err := pr.WriteListBegin(wr, %d, len(%s)); err != nil { return err }\n", 0 /* TODO: element type */, variableName)
+// 		g.write(out, "\t\tfor _, val := range %s {\n", variableName)
+// 		// TODO
+// 		g.write(out, "\t\t}\n")
+// 		g.write(out, "\tif err := pr.WriteListEnd(wr); err != nil { return err }\n")
+// 	case "set":
+// 		g.write(out, "\tif err := pr.WriteSetBegin(wr, %d, len(%s)); err != nil { return err }\n", 0 /* TODO: element type */, variableName)
+// 		g.write(out, "\t\tfor _, val := range %s {\n", variableName)
+// 		// TODO
+// 		g.write(out, "\t\t}\n")
+// 		g.write(out, "\tif err := pr.WriteSetEnd(wr); err != nil { return err }\n")
+// 	}
+
+// 	return nil
+// }
+
 func (g *GoGenerator) writeStruct(out io.Writer, st *parser.Struct) error {
 	structName := camelCase(st.Name)
 
@@ -256,7 +344,35 @@ func (g *GoGenerator) writeStruct(out io.Writer, st *parser.Struct) error {
 	for _, field := range st.Fields {
 		g.write(out, "\t%s\n", g.formatField(field))
 	}
-	return g.write(out, "}\n")
+	g.write(out, "}\n")
+
+	// g.write(out, "\nfunc (st *%s) EncodeThrift(wr io.Writer, pr Protocol) error {\n", structName)
+	// g.write(out, "\tif err := pr.WriteStructBegin(wr, \"%s\"); err != nil { return err }\n", structName)
+	// for _, field := range st.Fields {
+	// 	fieldName := camelCase(field.Name)
+	// 	deref := ""
+	// 	if field.Optional {
+	// 		g.write(out, "\tif st.%s != nil {\n", fieldName)
+	// 		deref = "*"
+	// 	} else if *flagGoPointers {
+	// 		g.write(out, "\tif st.%s == nil {\n\t\treturn ErrMissingRequiredField(\"%s\", \"%s\")\n\t}\n", fieldName, structName, fieldName)
+	// 		deref = "*"
+	// 	}
+
+	// 	g.write(out, "\tif err := pr.WriteFieldBegin(wr, st.%s, %d, %d); err != nil { return err }\n", fieldName, 0 /* field type */, field.Id)
+
+	// 	g.writeEncoder(out, deref, "st."+fieldName, field.Type)
+
+	// 	g.write(out, "\tif err := pr.WriteFieldEnd(wr); err != nil { return err }\n")
+
+	// 	if field.Optional {
+	// 		g.write(out, "\t}\n")
+	// 	}
+	// }
+	// g.write(out, "\tif err := pr.WriteStructEnd(wr); err != nil { return err }\n")
+	// g.write(out, "\treturn nil\n}\n")
+
+	return nil
 }
 
 func (g *GoGenerator) writeException(out io.Writer, ex *parser.Struct) error {
@@ -303,7 +419,11 @@ func (g *GoGenerator) writeService(out io.Writer, svc *parser.Service) error {
 
 	// Server
 
-	g.write(out, "\ntype %sServer struct {\n\tImplementation %s\n}\n", svcName, svcName)
+	if svc.Extends == "" {
+		g.write(out, "\ntype %sServer struct {\n\tImplementation %s\n}\n", svcName, svcName)
+	} else {
+		g.write(out, "\ntype %sServer struct {\n\t%sServer\n\tImplementation %s\n}\n", svcName, camelCase(svc.Extends), svcName)
+	}
 
 	// Server method wrappers
 
@@ -365,7 +485,11 @@ func (g *GoGenerator) writeService(out io.Writer, svc *parser.Service) error {
 		}
 	}
 
-	g.write(out, "\ntype %sClient struct {\n\tClient RPCClient\n}\n", svcName)
+	if svc.Extends == "" {
+		g.write(out, "\ntype %sClient struct {\n\tClient RPCClient\n}\n", svcName)
+	} else {
+		g.write(out, "\ntype %sClient struct {\n\t%sClient\n}\n", svcName, camelCase(svc.Extends))
+	}
 
 	for _, k := range methodNames {
 		method := svc.Methods[k]
@@ -496,14 +620,15 @@ func (g *GoGenerator) generateSingle(out io.Writer, thriftPath string, thrift *p
 }
 
 func (g *GoGenerator) Generate(outPath string) (err error) {
-	defer func() {
-		if r := recover(); r != nil {
-			if _, ok := r.(runtime.Error); ok {
-				panic(r)
-			}
-			err = r.(error)
-		}
-	}()
+	_ = runtime.GOMAXPROCS
+	// defer func() {
+	// 	if r := recover(); r != nil {
+	// 		if _, ok := r.(runtime.Error); ok {
+	// 			panic(r)
+	// 		}
+	// 		err = r.(error)
+	// 	}
+	// }()
 
 	// File out package namespaces if necessary
 	if g.Packages == nil {
