@@ -181,14 +181,18 @@ func (g *GoGenerator) writeConstant(out io.Writer, c *parser.Constant) error {
 func (g *GoGenerator) writeEnum(out io.Writer, enum *parser.Enum) error {
 	enumName := camelCase(enum.Name)
 
-	g.write(out, "\ntype %s int32\n\nvar(\n", enumName)
+	g.write(out, "\ntype %s int32\n", enumName)
 
 	valueNames := sortedKeys(enum.Values)
-
+	g.write(out, "\nconst (\n")
 	for _, name := range valueNames {
 		val := enum.Values[name]
-		g.write(out, "\t%s%s = %s(%d)\n", enumName, camelCase(name), enumName, val.Value)
+		g.write(out, "\t%s%s %s = %d\n", enumName, camelCase(name), enumName, val.Value)
 	}
+	g.write(out, ")\n")
+
+	// begin var
+	g.write(out, "\nvar (\n")
 
 	// EnumByName
 	g.write(out, "\t%sByName = map[string]%s{\n", enumName, enumName)
@@ -563,9 +567,12 @@ func (g *GoGenerator) Generate(outPath string) (err error) {
 		out := &bytes.Buffer{}
 		g.generateSingle(out, path, th)
 
-		outBytes, err := format.Source(out.Bytes())
-		if err != nil {
-			g.error(err)
+		outBytes := out.Bytes()
+		if true {
+			outBytes, err = format.Source(outBytes)
+			if err != nil {
+				g.error(err)
+			}
 		}
 
 		fi, err := os.OpenFile(outfile, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0644)
