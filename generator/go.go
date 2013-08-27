@@ -303,7 +303,11 @@ func (g *GoGenerator) writeService(out io.Writer, svc *parser.Service) error {
 
 	// Server
 
-	g.write(out, "\ntype %sServer struct {\n\tImplementation %s\n}\n", svcName, svcName)
+	if svc.Extends == "" {
+		g.write(out, "\ntype %sServer struct {\n\tImplementation %s\n}\n", svcName, svcName)
+	} else {
+		g.write(out, "\ntype %sServer struct {\n\t%sServer\n\tImplementation %s\n}\n", svcName, camelCase(svc.Extends), svcName)
+	}
 
 	// Server method wrappers
 
@@ -365,7 +369,11 @@ func (g *GoGenerator) writeService(out io.Writer, svc *parser.Service) error {
 		}
 	}
 
-	g.write(out, "\ntype %sClient struct {\n\tClient RPCClient\n}\n", svcName)
+	if svc.Extends == "" {
+		g.write(out, "\ntype %sClient struct {\n\tClient RPCClient\n}\n", svcName)
+	} else {
+		g.write(out, "\ntype %sClient struct {\n\t%sClient\n}\n", svcName, camelCase(svc.Extends))
+	}
 
 	for _, k := range methodNames {
 		method := svc.Methods[k]
