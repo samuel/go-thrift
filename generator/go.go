@@ -468,11 +468,13 @@ func (g *GoGenerator) generateSingle(out io.Writer, thriftPath string, thrift *p
 
 	//
 
-	for _, k := range sortedKeys(thrift.Constants) {
-		c := thrift.Constants[k]
-		if err := g.writeConstant(out, c); err != nil {
-			g.error(err)
+	if len(thrift.Constants) > 0 {
+		g.write(out, "\nconst (\n")
+		for _, k := range sortedKeys(thrift.Constants) {
+			c := thrift.Constants[k]
+			g.write(out, "\t%s = %+v\n", camelCase(c.Name), c.Value)
 		}
+		g.write(out, ")\n")
 	}
 
 	for _, k := range sortedKeys(thrift.Enums) {
