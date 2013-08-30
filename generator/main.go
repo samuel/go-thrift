@@ -73,7 +73,7 @@ func main() {
 	flag.Parse()
 
 	if flag.NArg() < 2 {
-		fmt.Fprintf(os.Stderr, "Usage of %s: [options] inputfile outputfile\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "Usage of %s: [options] inputfile outputpath\n", os.Args[0])
 		flag.PrintDefaults()
 		os.Exit(1)
 	}

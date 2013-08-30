@@ -63,6 +63,8 @@ type TestStruct struct {
 	Binary  []byte              `thrift:"8"`
 	Set     []string            `thrift:"9,set"`
 	Set2    map[string]struct{} `thrift:"10"`
+	Uint32  uint32              `thrift:"11"`
+	Uint64  uint64              `thrift:"12"`
 }
 
 type TestStructRequiredOptional struct {
@@ -145,6 +147,8 @@ func TestBasics(t *testing.T) {
 		[]byte{1, 2, 3},
 		[]string{"a", "b"},
 		map[string]struct{}{"i": struct{}{}, "o": struct{}{}},
+		1<<31 + 2,
+		1<<63 + 2,
 	}
 	buf := &bytes.Buffer{}
 

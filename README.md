@@ -46,9 +46,6 @@ quirks and limitations.
 
         StringSet []string `thrift:"1,set"`
 
-* Unsigned types aren't supported. Thrift only has signed types. Could
-  encode/decode unsigned types as their signed counterparts, but I
-  decided against that for now.
 * []byte get encoded/decoded as a string because the Thrift binary type
   is the same as string on the wire.
 
@@ -96,16 +93,13 @@ How to use the generator:
     $ go install github.com/samuel/go-thrift/generator
 
     $ generator --help
-    Usage of parsimony: [options] inputfile outputfile
+    Usage of parsimony: [options] inputfile outputpath
       -go.binarystring=false: Always use string for binary instead of []byte
       -go.json.enumnum=false: For JSON marshal enums by number instead of name
-      -go.packagename="": Override the package name
       -go.pointers=false: Make all fields pointers
 
     $ mkdir $GOPATH/src/cassandra
-    $ generator cassandra.thrift $GOPATH/cassandra/thrift.go
-
-    # Then can import "cassandra"
+    $ generator cassandra.thrift $GOPATH/src/
 
 TODO
 ----

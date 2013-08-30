@@ -107,9 +107,9 @@ func fieldType(t reflect.Type) byte {
 		return TypeByte
 	case reflect.Int16:
 		return TypeI16
-	case reflect.Int32, reflect.Int:
+	case reflect.Int32, reflect.Uint32, reflect.Int:
 		return TypeI32
-	case reflect.Int64:
+	case reflect.Int64, reflect.Uint64:
 		return TypeI64
 	case reflect.Float64:
 		return TypeDouble

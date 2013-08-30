@@ -109,9 +109,17 @@ func (e *encoder) writeValue(v reflect.Value, thriftType byte) {
 	case TypeI16:
 		err = e.p.WriteI16(e.w, int16(v.Int()))
 	case TypeI32:
-		err = e.p.WriteI32(e.w, int32(v.Int()))
+		if kind == reflect.Uint32 {
+			err = e.p.WriteI32(e.w, int32(v.Uint()))
+		} else {
+			err = e.p.WriteI32(e.w, int32(v.Int()))
+		}
 	case TypeI64:
-		err = e.p.WriteI64(e.w, int64(v.Int()))
+		if kind == reflect.Uint64 {
+			err = e.p.WriteI64(e.w, int64(v.Uint()))
+		} else {
+			err = e.p.WriteI64(e.w, v.Int())
+		}
 	case TypeDouble:
 		err = e.p.WriteDouble(e.w, v.Float())
 	case TypeString:

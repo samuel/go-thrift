@@ -94,13 +94,21 @@ func (d *decoder) readValue(thriftType byte, rf reflect.Value) {
 		if val, err := d.p.ReadI32(d.r); err != nil {
 			d.error(err)
 		} else {
-			v.SetInt(int64(val))
+			if kind == reflect.Uint32 {
+				v.SetUint(uint64(val))
+			} else {
+				v.SetInt(int64(val))
+			}
 		}
 	case TypeI64:
 		if val, err := d.p.ReadI64(d.r); err != nil {
 			d.error(err)
 		} else {
-			v.SetInt(val)
+			if kind == reflect.Uint64 {
+				v.SetUint(uint64(val))
+			} else {
+				v.SetInt(val)
+			}
 		}
 	case TypeDouble:
 		if val, err := d.p.ReadDouble(d.r); err != nil {
