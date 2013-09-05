@@ -36,7 +36,7 @@ func testProtocol(t *testing.T, pr Protocol) {
 	if v, err := pr.ReadI16(b); err != nil {
 		t.Fatalf("read i16 failed: %+v", err)
 	} else if v != 1234 {
-		t.Fatal("read i16 returned %d expected 1234", v)
+		t.Fatalf("read i16 returned %d expected 1234", v)
 	}
 
 	if err := pr.WriteI32(b, -1234); err != nil {
@@ -45,7 +45,7 @@ func testProtocol(t *testing.T, pr Protocol) {
 	if v, err := pr.ReadI32(b); err != nil {
 		t.Fatalf("read i32 failed: %+v", err)
 	} else if v != -1234 {
-		t.Fatal("read i32 returned %d expected -1234", v)
+		t.Fatalf("read i32 returned %d expected -1234", v)
 	}
 
 	if err := pr.WriteI64(b, -1234); err != nil {
@@ -54,7 +54,7 @@ func testProtocol(t *testing.T, pr Protocol) {
 	if v, err := pr.ReadI64(b); err != nil {
 		t.Fatalf("read i64 failed: %+v", err)
 	} else if v != -1234 {
-		t.Fatal("read i64 returned %d expected -1234", v)
+		t.Fatalf("read i64 returned %d expected -1234", v)
 	}
 
 	if err := pr.WriteDouble(b, -0.1234); err != nil {
@@ -63,7 +63,7 @@ func testProtocol(t *testing.T, pr Protocol) {
 	if v, err := pr.ReadDouble(b); err != nil {
 		t.Fatalf("read double failed: %+v", err)
 	} else if v != -0.1234 {
-		t.Fatal("read double returned %.4f expected -0.1234", v)
+		t.Fatalf("read double returned %.4f expected -0.1234", v)
 	}
 
 	testString := "012345"
@@ -74,7 +74,7 @@ func testProtocol(t *testing.T, pr Protocol) {
 		if v, err := pr.ReadString(b); err != nil {
 			t.Fatalf("read string failed: %+v", err)
 		} else if v != testString {
-			t.Fatal("read string returned %s expected '%s'", v, testString)
+			t.Fatalf("read string returned %s expected '%s'", v, testString)
 		}
 		testString += "012345"
 	}

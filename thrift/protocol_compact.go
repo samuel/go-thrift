@@ -121,7 +121,6 @@ func (p *compactProtocol) readVarint(r io.Reader) (int64, error) {
 			return val, ProtocolError{"CompactProtocol", "varint overflow on read"}
 		}
 	}
-	panic("Shouldn't be reached")
 }
 
 func (p *compactProtocol) readUvarint(r io.Reader) (uint64, error) {
@@ -144,7 +143,6 @@ func (p *compactProtocol) readUvarint(r io.Reader) (uint64, error) {
 			return val, ProtocolError{"CompactProtocol", "varint overflow on read"}
 		}
 	}
-	panic("Shouldn't be reached")
 }
 
 // Write a message header to the wire. Compact Protocol messages contain the

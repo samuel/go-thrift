@@ -93,7 +93,7 @@ func TestCompactString(t *testing.T) {
 			t.Fatalf("ReadString returned an error: %+v", err)
 		}
 		if v != expValue {
-			t.Fatalf("ReadString returned the wrong value %d instead of %d", v, expValue)
+			t.Fatalf("ReadString returned the wrong value %s instead of %s", v, expValue)
 		}
 	}
 }
