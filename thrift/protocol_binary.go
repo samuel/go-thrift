@@ -194,7 +194,7 @@ func (p *binaryProtocol) ReadMessageBegin(r io.Reader) (name string, messageType
 	if size < 0 {
 		version := uint32(size) & versionMask
 		if version != version1 {
-			err = ProtocolError{"BinaryProtocl", "bad version in ReadMessageBegin"}
+			err = ProtocolError{"BinaryProtocol", "bad version in ReadMessageBegin"}
 			return
 		}
 		messageType = byte(uint32(size) & typeMask)

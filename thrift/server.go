@@ -14,6 +14,7 @@ import (
 type serverCodec struct {
 	transport io.ReadWriteCloser
 	protocol  Protocol
+	nameCache map[string]string
 }
 
 // ServeConn runs the Thrift RPC server on a single connection. ServeConn blocks,
@@ -25,7 +26,11 @@ func ServeConn(conn io.ReadWriteCloser, protocol Protocol) {
 
 // NewServerCodec returns a new rpc.ServerCodec using Thrift RPC on conn using the specified protocol.
 func NewServerCodec(conn io.ReadWriteCloser, protocol Protocol) rpc.ServerCodec {
-	return &serverCodec{conn, protocol}
+	return &serverCodec{
+		transport: conn,
+		protocol:  protocol,
+		nameCache: make(map[string]string, 8),
+	}
 }
 
 func (c *serverCodec) ReadRequestHeader(request *rpc.Request) error {
@@ -33,12 +38,17 @@ func (c *serverCodec) ReadRequestHeader(request *rpc.Request) error {
 	if err != nil {
 		return err
 	}
-	name = CamelCase(name)
-	if strings.ContainsRune(name, '.') {
-		request.ServiceMethod = name
-	} else {
-		request.ServiceMethod = "Thrift." + name
+	// TODO: should use a limited size cache for the nameCache to avoid a possible
+	//       memory overflow from nefarious or broken clients
+	newName := c.nameCache[name]
+	if newName == "" {
+		newName = CamelCase(name)
+		if !strings.ContainsRune(newName, '.') {
+			newName = "Thrift." + newName
+		}
+		c.nameCache[name] = newName
 	}
+	request.ServiceMethod = newName
 	request.Seq = uint64(seq)
 
 	if messageType != MessageTypeCall { // Currently don't support one way
