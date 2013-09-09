@@ -31,6 +31,7 @@ type Flusher interface {
 type FramedReadWriteCloser struct {
 	wrapped      io.ReadWriteCloser
 	maxFrameSize int
+	rtmp         []byte
 	rbuf         *bytes.Buffer
 	wbuf         *bytes.Buffer
 }
@@ -42,6 +43,7 @@ func NewFramedReadWriteCloser(wrapped io.ReadWriteCloser, maxFrameSize int) *Fra
 	return &FramedReadWriteCloser{
 		wrapped:      wrapped,
 		maxFrameSize: maxFrameSize,
+		rtmp:         make([]byte, 4),
 		rbuf:         &bytes.Buffer{},
 		wbuf:         &bytes.Buffer{},
 	}
@@ -67,12 +69,12 @@ func (f *FramedReadWriteCloser) fillBuffer() error {
 	}
 
 	f.rbuf.Reset()
-	frameSize := uint32(0)
-	if err := binary.Read(f.wrapped, binary.BigEndian, &frameSize); err != nil {
+	if _, err := io.ReadFull(f.wrapped, f.rtmp); err != nil {
 		return err
 	}
-	if int(frameSize) > f.maxFrameSize {
-		return &ErrFrameTooBig{int(frameSize), f.maxFrameSize}
+	frameSize := int(binary.BigEndian.Uint32(f.rtmp))
+	if frameSize > f.maxFrameSize {
+		return &ErrFrameTooBig{frameSize, f.maxFrameSize}
 	}
 	// TODO: Copy may return the full frame and still return an error. In that
 	//       case we could return the asked for bytes to the caller (and the error).
