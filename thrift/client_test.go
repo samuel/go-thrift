@@ -7,10 +7,10 @@ package thrift
 import (
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"net/rpc"
-	// "runtime"
 	"sync"
 	"testing"
 )
@@ -24,8 +24,55 @@ type TestRequest struct {
 	Value int32 `thrift:"1,required"`
 }
 
+func (tr *TestRequest) EncodeThrift(w io.Writer, proto Protocol) error {
+	if err := proto.WriteStructBegin(w, "TestRequest"); err != nil {
+		return err
+	}
+	if err := proto.WriteFieldBegin(w, "Value", TypeI32, 1); err != nil {
+		return err
+	}
+	if err := proto.WriteI32(w, tr.Value); err != nil {
+		return err
+	}
+	if err := proto.WriteFieldEnd(w); err != nil {
+		return err
+	}
+	if err := proto.WriteFieldStop(w); err != nil {
+		return err
+	}
+	return proto.WriteStructEnd(w)
+}
+
 type TestResponse struct {
 	Value int32 `thrift:"0,required"`
+}
+
+func (tr *TestResponse) DecodeThrift(r io.Reader, proto Protocol) error {
+	if err := proto.ReadStructBegin(r); err != nil {
+		return err
+	}
+	ftype, id, err := proto.ReadFieldBegin(r)
+	if err != nil {
+		return err
+	}
+	if id != 0 || ftype != TypeI32 {
+		return &MissingRequiredField{
+			StructName: "TestResponse",
+			FieldName:  "Value",
+		}
+	}
+	if tr.Value, err = proto.ReadI32(r); err != nil {
+		return err
+	}
+	if err := proto.ReadFieldEnd(r); err != nil {
+		return err
+	}
+	if ftype, _, err := proto.ReadFieldBegin(r); err != nil {
+		return err
+	} else if ftype != TypeStop {
+		return errors.New("expected field stop")
+	}
+	return proto.ReadStructEnd(r)
 }
 
 type TestService int
@@ -59,7 +106,6 @@ func startServer() {
 			conn, err := l.Accept()
 			if err != nil {
 				panic(err)
-				continue
 			}
 			go rpc.ServeCodec(NewServerCodec(NewFramedReadWriteCloser(conn, 0), NewBinaryProtocol(true, false)))
 		}
