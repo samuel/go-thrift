@@ -16,6 +16,10 @@ const (
 	typeMask    uint32 = 0x000000ff
 )
 
+const (
+	maxMessageNameSize = 128
+)
+
 type binaryProtocol struct {
 	strictWrite bool
 	strictRead  bool
@@ -206,6 +210,10 @@ func (p *binaryProtocol) ReadMessageBegin(r io.Reader) (name string, messageType
 			err = ProtocolError{"BinaryProtocol", "no protocol version header"}
 			return
 		}
+		if size > maxMessageNameSize {
+			err = ProtocolError{"BinaryProtocol", "message name exceeds max size"}
+			return
+		}
 		nameBytes := make([]byte, size)
 		if _, err = r.Read(nameBytes); err != nil {
 			return
@@ -332,6 +340,9 @@ func (p *binaryProtocol) ReadString(r io.Reader) (string, error) {
 	if err != nil || ln == 0 {
 		return "", err
 	}
+	if ln < 0 {
+		return "", ProtocolError{"BinaryProtocol", "negative length while reading string"}
+	}
 	b := p.readBuf
 	if int(ln) > len(b) {
 		b = make([]byte, ln)
@@ -348,6 +359,9 @@ func (p *binaryProtocol) ReadBytes(r io.Reader) ([]byte, error) {
 	ln, err := p.ReadI32(r)
 	if err != nil || ln == 0 {
 		return nil, err
+	}
+	if ln < 0 {
+		return nil, ProtocolError{"BinaryProtocol", "negative length while reading bytes"}
 	}
 	b := make([]byte, ln)
 	if _, err := io.ReadFull(r, b); err != nil {

@@ -199,6 +199,29 @@ func testProtocol(t *testing.T, pr Protocol) {
 	}
 }
 
+func TestBinaryProtocolBadStringLength(t *testing.T) {
+	b := &bytes.Buffer{}
+	pr := NewBinaryProtocol(true, false)
+
+	// zero string length
+	if err := pr.WriteI32(b, 0); err != nil {
+		t.Fatal(err)
+	}
+	if st, err := pr.ReadString(b); err != nil {
+		t.Fatal(err)
+	} else if st != "" {
+		t.Fatal("BinaryProtocol.ReadString didn't return an empty string given a length of 0")
+	}
+
+	// negative string length
+	if err := pr.WriteI32(b, -1); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pr.ReadString(b); err == nil {
+		t.Fatal("BinaryProtocol.ReadString didn't return an error given a negative length")
+	}
+}
+
 func TestBinaryProtocol(t *testing.T) {
 	testProtocol(t, NewBinaryProtocol(true, false))
 }
