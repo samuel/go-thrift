@@ -10,7 +10,7 @@ import (
 	"log"
 	"net"
 	"net/rpc"
-	"runtime"
+	// "runtime"
 	"sync"
 	"testing"
 )
@@ -117,16 +117,10 @@ func TestRPCMallocCount(t *testing.T) {
 	}
 	req := &TestRequest{123}
 	res := &TestResponse{789}
-	const count = 100
-	memstats := new(runtime.MemStats)
-	runtime.ReadMemStats(memstats)
-	mallocs := 0 - memstats.Mallocs
-	for i := 0; i < count; i++ {
+	allocs := testing.AllocsPerRun(100, func() {
 		if err := c.Call("Success", req, res); err != nil {
 			t.Fatalf("Client.Call returned error: %+v", err)
 		}
-	}
-	runtime.ReadMemStats(memstats)
-	mallocs += memstats.Mallocs
-	fmt.Printf("mallocs per thrift.rpc round trip: %d\n", mallocs/count)
+	})
+	fmt.Printf("mallocs per thrift.rpc round trip: %d\n", int(allocs))
 }
