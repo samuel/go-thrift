@@ -178,6 +178,14 @@ func (p *binaryProtocol) WriteDouble(w io.Writer, value float64) (err error) {
 }
 
 func (p *binaryProtocol) WriteString(w io.Writer, value string) error {
+	if len(value) <= len(p.writeBuf) {
+		if err := p.WriteI32(w, int32(len(value))); err != nil {
+			return err
+		}
+		n := copy(p.writeBuf, value)
+		_, err := w.Write(p.writeBuf[:n])
+		return err
+	}
 	return p.WriteBytes(w, []byte(value))
 }
 
