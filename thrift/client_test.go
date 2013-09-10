@@ -11,13 +11,14 @@ import (
 	"log"
 	"net"
 	"net/rpc"
+	"runtime"
 	"sync"
 	"testing"
 )
 
 var (
 	serverAddr, newServerAddr string
-	once, newOnce             sync.Once
+	once                      sync.Once
 )
 
 type TestRequest struct {
@@ -169,4 +170,5 @@ func TestRPCMallocCount(t *testing.T) {
 		}
 	})
 	fmt.Printf("mallocs per thrift.rpc round trip: %d\n", int(allocs))
+	runtime.GC()
 }

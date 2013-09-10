@@ -16,11 +16,10 @@ const (
 )
 
 type ErrFrameTooBig struct {
-	Size    int
-	MaxSize int
+	Size, MaxSize int64
 }
 
-func (e *ErrFrameTooBig) Error() string {
+func (e ErrFrameTooBig) Error() string {
 	return fmt.Sprintf("thrift: frame size while reading over allowed size (%d > %d)", e.Size, e.MaxSize)
 }
 
@@ -29,12 +28,13 @@ type Flusher interface {
 }
 
 type FramedReadWriteCloser struct {
-	wrapped      io.ReadWriteCloser
-	maxFrameSize int
-	rtmp         []byte
-	wtmp         []byte
-	rbuf         *bytes.Buffer
-	wbuf         *bytes.Buffer
+	wrapped       io.ReadWriteCloser
+	limitedReader *io.LimitedReader
+	maxFrameSize  int64
+	rtmp          []byte
+	wtmp          []byte
+	rbuf          *bytes.Buffer
+	wbuf          *bytes.Buffer
 }
 
 func NewFramedReadWriteCloser(wrapped io.ReadWriteCloser, maxFrameSize int) *FramedReadWriteCloser {
@@ -42,12 +42,13 @@ func NewFramedReadWriteCloser(wrapped io.ReadWriteCloser, maxFrameSize int) *Fra
 		maxFrameSize = DefaultMaxFrameSize
 	}
 	return &FramedReadWriteCloser{
-		wrapped:      wrapped,
-		maxFrameSize: maxFrameSize,
-		rtmp:         make([]byte, 4),
-		wtmp:         make([]byte, 4),
-		rbuf:         &bytes.Buffer{},
-		wbuf:         &bytes.Buffer{},
+		wrapped:       wrapped,
+		limitedReader: &io.LimitedReader{wrapped, 0},
+		maxFrameSize:  int64(maxFrameSize),
+		rtmp:          make([]byte, 4),
+		wtmp:          make([]byte, 4),
+		rbuf:          &bytes.Buffer{},
+		wbuf:          &bytes.Buffer{},
 	}
 }
 
@@ -74,14 +75,17 @@ func (f *FramedReadWriteCloser) fillBuffer() error {
 	if _, err := io.ReadFull(f.wrapped, f.rtmp); err != nil {
 		return err
 	}
-	frameSize := int(binary.BigEndian.Uint32(f.rtmp))
-	if frameSize > f.maxFrameSize || frameSize < 0 {
-		return &ErrFrameTooBig{frameSize, f.maxFrameSize}
+	frameSize := int64(binary.BigEndian.Uint32(f.rtmp))
+	if frameSize > f.maxFrameSize {
+		return ErrFrameTooBig{frameSize, f.maxFrameSize}
 	}
-	// TODO: Copy may return the full frame and still return an error. In that
-	//       case we could return the asked for bytes to the caller (and the error).
-	if _, err := io.CopyN(f.rbuf, f.wrapped, int64(frameSize)); err != nil {
+	f.limitedReader.N = frameSize
+	written, err := io.Copy(f.rbuf, f.limitedReader)
+	if err != nil {
 		return err
+	}
+	if written < frameSize {
+		return io.EOF
 	}
 	return nil
 }
@@ -91,8 +95,8 @@ func (f *FramedReadWriteCloser) Write(p []byte) (int, error) {
 	if err != nil {
 		return n, err
 	}
-	if f.wbuf.Len() > f.maxFrameSize {
-		return n, &ErrFrameTooBig{f.wbuf.Len(), f.maxFrameSize}
+	if int64(f.wbuf.Len()) > f.maxFrameSize {
+		return n, &ErrFrameTooBig{int64(f.wbuf.Len()), f.maxFrameSize}
 	}
 	return n, nil
 }
