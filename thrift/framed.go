@@ -75,7 +75,7 @@ func (f *FramedReadWriteCloser) fillBuffer() error {
 		return err
 	}
 	frameSize := int(binary.BigEndian.Uint32(f.rtmp))
-	if frameSize > f.maxFrameSize {
+	if frameSize > f.maxFrameSize || frameSize < 0 {
 		return &ErrFrameTooBig{frameSize, f.maxFrameSize}
 	}
 	// TODO: Copy may return the full frame and still return an error. In that
