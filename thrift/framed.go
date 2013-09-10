@@ -32,6 +32,7 @@ type FramedReadWriteCloser struct {
 	wrapped      io.ReadWriteCloser
 	maxFrameSize int
 	rtmp         []byte
+	wtmp         []byte
 	rbuf         *bytes.Buffer
 	wbuf         *bytes.Buffer
 }
@@ -44,6 +45,7 @@ func NewFramedReadWriteCloser(wrapped io.ReadWriteCloser, maxFrameSize int) *Fra
 		wrapped:      wrapped,
 		maxFrameSize: maxFrameSize,
 		rtmp:         make([]byte, 4),
+		wtmp:         make([]byte, 4),
 		rbuf:         &bytes.Buffer{},
 		wbuf:         &bytes.Buffer{},
 	}
@@ -102,7 +104,8 @@ func (f *FramedReadWriteCloser) Close() error {
 func (f *FramedReadWriteCloser) Flush() error {
 	frameSize := uint32(f.wbuf.Len())
 	if frameSize > 0 {
-		if err := binary.Write(f.wrapped, binary.BigEndian, frameSize); err != nil {
+		binary.BigEndian.PutUint32(f.wtmp, frameSize)
+		if _, err := f.wrapped.Write(f.wtmp); err != nil {
 			return err
 		}
 		_, err := io.Copy(f.wrapped, f.wbuf)
