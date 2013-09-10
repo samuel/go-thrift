@@ -44,8 +44,55 @@ func (tr *TestRequest) EncodeThrift(w io.Writer, proto Protocol) error {
 	return proto.WriteStructEnd(w)
 }
 
+func (tr *TestRequest) DecodeThrift(r io.Reader, proto Protocol) error {
+	if err := proto.ReadStructBegin(r); err != nil {
+		return err
+	}
+	ftype, id, err := proto.ReadFieldBegin(r)
+	if err != nil {
+		return err
+	}
+	if id != 1 || ftype != TypeI32 {
+		return &MissingRequiredField{
+			StructName: "TestRequest",
+			FieldName:  "Value",
+		}
+	}
+	if tr.Value, err = proto.ReadI32(r); err != nil {
+		return err
+	}
+	if err := proto.ReadFieldEnd(r); err != nil {
+		return err
+	}
+	if ftype, _, err := proto.ReadFieldBegin(r); err != nil {
+		return err
+	} else if ftype != TypeStop {
+		return errors.New("expected field stop")
+	}
+	return proto.ReadStructEnd(r)
+}
+
 type TestResponse struct {
 	Value int32 `thrift:"0,required"`
+}
+
+func (tr *TestResponse) EncodeThrift(w io.Writer, proto Protocol) error {
+	if err := proto.WriteStructBegin(w, "TestResponse"); err != nil {
+		return err
+	}
+	if err := proto.WriteFieldBegin(w, "Value", TypeI32, 0); err != nil {
+		return err
+	}
+	if err := proto.WriteI32(w, tr.Value); err != nil {
+		return err
+	}
+	if err := proto.WriteFieldEnd(w); err != nil {
+		return err
+	}
+	if err := proto.WriteFieldStop(w); err != nil {
+		return err
+	}
+	return proto.WriteStructEnd(w)
 }
 
 func (tr *TestResponse) DecodeThrift(r io.Reader, proto Protocol) error {
