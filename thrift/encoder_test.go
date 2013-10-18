@@ -63,8 +63,9 @@ type TestStruct struct {
 	Binary  []byte              `thrift:"8"`
 	Set     []string            `thrift:"9,set"`
 	Set2    map[string]struct{} `thrift:"10"`
-	Uint32  uint32              `thrift:"11"`
-	Uint64  uint64              `thrift:"12"`
+	Set3    map[string]bool     `thrift:"11,set"`
+	Uint32  uint32              `thrift:"12"`
+	Uint64  uint64              `thrift:"13"`
 }
 
 type TestStructRequiredOptional struct {
@@ -147,6 +148,7 @@ func TestBasics(t *testing.T) {
 		[]byte{1, 2, 3},
 		[]string{"a", "b"},
 		map[string]struct{}{"i": struct{}{}, "o": struct{}{}},
+		map[string]bool{"q": true, "p": false},
 		1<<31 + 2,
 		1<<63 + 2,
 	}
@@ -162,6 +164,9 @@ func TestBasics(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	// Make sure map[string]bool regards a false value as not-belonging to the set
+	delete(s.Set3, "p")
 
 	if !reflect.DeepEqual(s, s2) {
 		t.Fatalf("encdec doesn't match: %+v != %+v", s, s2)

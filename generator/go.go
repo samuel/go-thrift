@@ -28,7 +28,7 @@ var (
 )
 
 var (
-	goNamespaceOrder = []string{"go", "perl", "py", "cpp"}
+	goNamespaceOrder = []string{"go", "perl", "py", "cpp", "rb", "java"}
 )
 
 type ErrUnknownType string
@@ -43,12 +43,17 @@ func (e ErrMissingInclude) Error() string {
 	return fmt.Sprintf("Missing include %s", string(e))
 }
 
+type GoPackage struct {
+	Path string
+	Name string
+}
+
 type GoGenerator struct {
 	thrift *parser.Thrift
 	pkg    string
 
 	ThriftFiles map[string]*parser.Thrift
-	Packages    map[string]string
+	Packages    map[string]GoPackage
 }
 
 func (g *GoGenerator) error(err error) {
@@ -74,7 +79,7 @@ func (g *GoGenerator) formatType(pkg string, thrift *parser.Thrift, typ *parser.
 		if thrift == nil {
 			g.error(ErrMissingInclude(thriftFilename))
 		}
-		pkg = g.Packages[thriftFilename]
+		pkg = g.Packages[thriftFilename].Name
 		typ = &parser.Type{
 			Name:      parts[1],
 			KeyType:   typ.KeyType,
@@ -435,7 +440,7 @@ func (g *GoGenerator) writeService(out io.Writer, svc *parser.Service) error {
 }
 
 func (g *GoGenerator) generateSingle(out io.Writer, thriftPath string, thrift *parser.Thrift) {
-	packageName := g.Packages[thriftPath]
+	packageName := g.Packages[thriftPath].Name
 	g.thrift = thrift
 	g.pkg = packageName
 
@@ -452,7 +457,7 @@ func (g *GoGenerator) generateSingle(out io.Writer, thriftPath string, thrift *p
 	}
 	if len(thrift.Includes) > 0 {
 		for _, path := range thrift.Includes {
-			pkg := g.Packages[path]
+			pkg := g.Packages[path].Name
 			if pkg != packageName {
 				imports = append(imports, pkg)
 			}
@@ -522,34 +527,29 @@ func (g *GoGenerator) Generate(outPath string) (err error) {
 		}
 	}()
 
-	// File out package namespaces if necessary
+	// Generate package namespace mapping if necessary
 	if g.Packages == nil {
-		g.Packages = make(map[string]string)
+		g.Packages = make(map[string]GoPackage)
 	}
 	for path, th := range g.ThriftFiles {
-		if g.Packages[path] == "" {
-			packageName := ""
+		if pkg, ok := g.Packages[path]; !ok || pkg.Name == "" {
+			pkg := GoPackage{}
 			for _, k := range goNamespaceOrder {
-				packageName = th.Namespaces[k]
-				if packageName != "" {
-					parts := strings.Split(packageName, ".")
-					packageName = parts[len(parts)-1]
+				pkg.Name = th.Namespaces[k]
+				if pkg.Name != "" {
+					parts := strings.Split(pkg.Name, ".")
+					if len(parts) > 1 {
+						pkg.Path = strings.Join(parts[:len(parts)-1], "/")
+						pkg.Name = parts[len(parts)-1]
+					}
 					break
 				}
 			}
-			if packageName == "" {
-				if ns := th.Namespaces["rb"]; ns != "" {
-					packageName = strings.Replace(ns, ".", "_", -1)
-				} else if ns := th.Namespaces["java"]; ns != "" {
-					packageName = strings.Replace(ns, ".", "_", -1)
-				}
+			if pkg.Name == "" {
+				pkg.Name = filepath.Base(path)
 			}
-			if packageName == "" {
-				name := filepath.Base(path)
-				packageName = name
-			}
-			packageName = validIdentifier(strings.ToLower(packageName), "_")
-			g.Packages[path] = packageName
+			pkg.Name = validIdentifier(strings.ToLower(pkg.Name), "_")
+			g.Packages[path] = pkg
 		}
 	}
 
@@ -562,7 +562,7 @@ func (g *GoGenerator) Generate(outPath string) (err error) {
 			}
 		}
 		filename += ".go"
-		pkgpath := filepath.Join(outPath, pkg)
+		pkgpath := filepath.Join(outPath, pkg.Path, pkg.Name)
 		outfile := filepath.Join(pkgpath, filename)
 
 		if err := os.MkdirAll(pkgpath, 0755); err != nil && !os.IsExist(err) {
