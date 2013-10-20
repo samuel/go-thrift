@@ -359,7 +359,7 @@ func (g *GoGenerator) writeService(out io.Writer, svc *parser.Service) error {
 		// Request struct
 		method := svc.Methods[k]
 		reqStructName := svcName + camelCase(method.Name) + "Request"
-		if err := g.writeStruct(out, &parser.Struct{reqStructName, method.Arguments}); err != nil {
+		if err := g.writeStruct(out, &parser.Struct{Name: reqStructName, Fields: method.Arguments}); err != nil {
 			return err
 		}
 
@@ -369,12 +369,12 @@ func (g *GoGenerator) writeService(out io.Writer, svc *parser.Service) error {
 			// Response struct
 			args := make([]*parser.Field, 0, len(method.Exceptions))
 			if method.ReturnType != nil && method.ReturnType.Name != "void" {
-				args = append(args, &parser.Field{0, "value", len(method.Exceptions) != 0, method.ReturnType, nil})
+				args = append(args, &parser.Field{Id: 0, Name: "value", Optional: len(method.Exceptions) != 0, Type: method.ReturnType, Default: nil})
 			}
 			for _, ex := range method.Exceptions {
 				args = append(args, ex)
 			}
-			res := &parser.Struct{svcName + camelCase(method.Name) + "Response", args}
+			res := &parser.Struct{Name: svcName + camelCase(method.Name) + "Response", Fields: args}
 			if err := g.writeStruct(out, res); err != nil {
 				return err
 			}

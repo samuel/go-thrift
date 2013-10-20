@@ -43,7 +43,7 @@ func NewFramedReadWriteCloser(wrapped io.ReadWriteCloser, maxFrameSize int) *Fra
 	}
 	return &FramedReadWriteCloser{
 		wrapped:       wrapped,
-		limitedReader: &io.LimitedReader{wrapped, 0},
+		limitedReader: &io.LimitedReader{R: wrapped, N: 0},
 		maxFrameSize:  int64(maxFrameSize),
 		rtmp:          make([]byte, 4),
 		wtmp:          make([]byte, 4),

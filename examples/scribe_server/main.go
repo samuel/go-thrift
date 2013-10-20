@@ -22,7 +22,7 @@ func (s *scribeServiceImplementation) Log(messages []*scribe.LogEntry) (scribe.R
 
 func main() {
 	scribeService := new(scribeServiceImplementation)
-	rpc.RegisterName("Thrift", &scribe.ScribeServer{scribeService})
+	rpc.RegisterName("Thrift", &scribe.ScribeServer{Implementation: scribeService})
 
 	ln, err := net.Listen("tcp", ":1463")
 	if err != nil {
