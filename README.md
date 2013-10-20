@@ -1,6 +1,8 @@
 Thrift Package for Go
 =====================
 
+[![Build Status](https://travis-ci.org/samuel/go-thrift.png)](https://travis-ci.org/samuel/go-thrift)
+
 API Documentation: <http://godoc.org/github.com/samuel/go-thrift>
 
 License
