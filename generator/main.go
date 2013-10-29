@@ -25,13 +25,11 @@ func camelCase(st string) string {
 }
 
 func lowerCamelCase(st string) string {
-	// // Assume st is not unicode
-	// if strings.ToUpper(st) == st {
-	// 	return strings.ToLower(st)
-	// }
-	// st = thrift.CamelCase(st)
-	// return strings.ToLower(st[:1]) + st[1:]
-	return camelCase(st)
+	if len(st) <= 1 {
+		return strings.ToLower(st)
+	}
+	st = thrift.CamelCase(st)
+	return strings.ToLower(st[:1]) + st[1:]
 }
 
 // Converts a string to a valid Golang identifier, as defined in

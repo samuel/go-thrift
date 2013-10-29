@@ -170,7 +170,7 @@ func (g *GoGenerator) formatField(field *parser.Field) string {
 func (g *GoGenerator) formatArguments(arguments []*parser.Field) string {
 	args := make([]string, len(arguments))
 	for i, arg := range arguments {
-		args[i] = fmt.Sprintf("%s %s", camelCase(arg.Name), g.formatType(g.pkg, g.thrift, arg.Type, arg.Optional))
+		args[i] = fmt.Sprintf("%s %s", lowerCamelCase(arg.Name), g.formatType(g.pkg, g.thrift, arg.Type, arg.Optional))
 	}
 	return strings.Join(args, ", ")
 }
