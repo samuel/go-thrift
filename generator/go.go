@@ -437,8 +437,7 @@ func (g *GoGenerator) writeService(out io.Writer, svc *parser.Service) error {
 		// Request
 		g.write(out, "\treq := &%s%sRequest{\n", svcName, methodName)
 		for _, arg := range method.Arguments {
-			argName := camelCase(arg.Name)
-			g.write(out, "\t\t%s: %s,\n", argName, argName)
+			g.write(out, "\t\t%s: %s,\n", camelCase(arg.Name), lowerCamelCase(arg.Name))
 		}
 		g.write(out, "\t}\n")
 
