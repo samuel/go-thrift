@@ -404,7 +404,7 @@ func (g *GoGenerator) writeService(out io.Writer, svc *parser.Service) error {
 			// Response struct
 			args := make([]*parser.Field, 0, len(method.Exceptions))
 			if method.ReturnType != nil && method.ReturnType.Name != "void" {
-				args = append(args, &parser.Field{Id: 0, Name: "value", Optional: len(method.Exceptions) != 0, Type: method.ReturnType, Default: nil})
+				args = append(args, &parser.Field{Id: 0, Name: "value", Optional: false /*len(method.Exceptions) != 0*/, Type: method.ReturnType, Default: nil})
 			}
 			for _, ex := range method.Exceptions {
 				args = append(args, ex)
