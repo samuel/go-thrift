@@ -56,6 +56,41 @@ type GoGenerator struct {
 	Packages    map[string]GoPackage
 }
 
+var goKeywords = map[string]bool{
+	"break":       true,
+	"default":     true,
+	"func":        true,
+	"interface":   true,
+	"select":      true,
+	"case":        true,
+	"defer":       true,
+	"go":          true,
+	"map":         true,
+	"struct":      true,
+	"chan":        true,
+	"else":        true,
+	"goto":        true,
+	"package":     true,
+	"switch":      true,
+	"const":       true,
+	"fallthrough": true,
+	"if":          true,
+	"range":       true,
+	"type":        true,
+	"continue":    true,
+	"for":         true,
+	"import":      true,
+	"return":      true,
+	"var":         true,
+}
+
+func validGoIdent(id string) string {
+	if goKeywords[id] {
+		return "_" + id
+	}
+	return id
+}
+
 func (g *GoGenerator) error(err error) {
 	panic(err)
 }
@@ -170,7 +205,7 @@ func (g *GoGenerator) formatField(field *parser.Field) string {
 func (g *GoGenerator) formatArguments(arguments []*parser.Field) string {
 	args := make([]string, len(arguments))
 	for i, arg := range arguments {
-		args[i] = fmt.Sprintf("%s %s", lowerCamelCase(arg.Name), g.formatType(g.pkg, g.thrift, arg.Type, arg.Optional))
+		args[i] = fmt.Sprintf("%s %s", validGoIdent(lowerCamelCase(arg.Name)), g.formatType(g.pkg, g.thrift, arg.Type, arg.Optional))
 	}
 	return strings.Join(args, ", ")
 }
