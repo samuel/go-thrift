@@ -10,23 +10,7 @@ import (
 )
 
 type ClosingBuffer struct {
-	Buffer *bytes.Buffer
-}
-
-func (c *ClosingBuffer) Len() int {
-	return c.Buffer.Len()
-}
-
-func (c *ClosingBuffer) Bytes() []byte {
-	return c.Buffer.Bytes()
-}
-
-func (c *ClosingBuffer) Read(b []byte) (int, error) {
-	return c.Buffer.Read(b)
-}
-
-func (c *ClosingBuffer) Write(b []byte) (int, error) {
-	return c.Buffer.Write(b)
+	*bytes.Buffer
 }
 
 func (c *ClosingBuffer) Close() error {

@@ -9,12 +9,15 @@ import (
 	"io"
 	"net/rpc"
 	"strings"
+	"sync"
 )
 
 type serverCodec struct {
-	transport io.ReadWriteCloser
-	protocol  Protocol
-	nameCache map[string]string
+	transport  io.ReadWriteCloser
+	protocol   Protocol
+	nameCache  map[string]string // incoming name -> registered name
+	methodName map[uint64]string // sequence ID -> method name
+	mu         sync.Mutex
 }
 
 // ServeConn runs the Thrift RPC server on a single connection. ServeConn blocks,
@@ -27,9 +30,10 @@ func ServeConn(conn io.ReadWriteCloser, protocol Protocol) {
 // NewServerCodec returns a new rpc.ServerCodec using Thrift RPC on conn using the specified protocol.
 func NewServerCodec(conn io.ReadWriteCloser, protocol Protocol) rpc.ServerCodec {
 	return &serverCodec{
-		transport: conn,
-		protocol:  protocol,
-		nameCache: make(map[string]string, 8),
+		transport:  conn,
+		protocol:   protocol,
+		nameCache:  make(map[string]string, 8),
+		methodName: make(map[uint64]string, 8),
 	}
 }
 
@@ -38,8 +42,13 @@ func (c *serverCodec) ReadRequestHeader(request *rpc.Request) error {
 	if err != nil {
 		return err
 	}
+	if messageType != MessageTypeCall { // Currently don't support one way
+		return errors.New("thrift: expected Call message type")
+	}
+
 	// TODO: should use a limited size cache for the nameCache to avoid a possible
 	//       memory overflow from nefarious or broken clients
+	c.mu.Lock()
 	newName := c.nameCache[name]
 	if newName == "" {
 		newName = CamelCase(name)
@@ -48,12 +57,11 @@ func (c *serverCodec) ReadRequestHeader(request *rpc.Request) error {
 		}
 		c.nameCache[name] = newName
 	}
+	c.methodName[uint64(seq)] = name
+	c.mu.Unlock()
+
 	request.ServiceMethod = newName
 	request.Seq = uint64(seq)
-
-	if messageType != MessageTypeCall { // Currently don't support one way
-		return errors.New("thrift: exception Call message type")
-	}
 
 	return nil
 }
@@ -72,6 +80,12 @@ func (c *serverCodec) ReadRequestBody(thriftStruct interface{}) error {
 }
 
 func (c *serverCodec) WriteResponse(response *rpc.Response, thriftStruct interface{}) error {
+	c.mu.Lock()
+	methodName := c.methodName[response.Seq]
+	delete(c.methodName, response.Seq)
+	c.mu.Unlock()
+	response.ServiceMethod = methodName
+
 	mtype := byte(MessageTypeReply)
 	if response.Error != "" {
 		mtype = MessageTypeException
