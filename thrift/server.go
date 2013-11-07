@@ -48,7 +48,6 @@ func (c *serverCodec) ReadRequestHeader(request *rpc.Request) error {
 
 	// TODO: should use a limited size cache for the nameCache to avoid a possible
 	//       memory overflow from nefarious or broken clients
-	c.mu.Lock()
 	newName := c.nameCache[name]
 	if newName == "" {
 		newName = CamelCase(name)
@@ -57,6 +56,8 @@ func (c *serverCodec) ReadRequestHeader(request *rpc.Request) error {
 		}
 		c.nameCache[name] = newName
 	}
+
+	c.mu.Lock()
 	c.methodName[uint64(seq)] = name
 	c.mu.Unlock()
 
