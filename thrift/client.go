@@ -5,11 +5,46 @@
 package thrift
 
 import (
+	"bufio"
 	"errors"
 	"io"
 	"net"
 	"net/rpc"
 )
+
+// BufferReadWriteCloseFlusher
+type bufferRWCF struct {
+	rwc  io.ReadWriteCloser
+	brwf *bufio.ReadWriter
+}
+
+func newBufferRWCF(rwc io.ReadWriteCloser, size int) *bufferRWCF {
+	if size <= 0 {
+		return nil
+	}
+
+	bio := &bufferRWCF{}
+	bio.brwf = bufio.NewReadWriter(bufio.NewReaderSize(rwc, size), bufio.NewWriterSize(rwc, size))
+	bio.rwc = rwc
+
+	return bio
+}
+
+func (bio *bufferRWCF) Read(p []byte) (int, error) {
+	return bio.brwf.Read(p)
+}
+
+func (bio *bufferRWCF) Write(p []byte) (int, error) {
+	return bio.brwf.Write(p)
+}
+
+func (bio *bufferRWCF) Flush() error {
+	return bio.brwf.Flush()
+}
+
+func (bio *bufferRWCF) Close() error {
+	return bio.rwc.Close()
+}
 
 // Implements rpc.ClientCodec
 type clientCodec struct {
@@ -69,6 +104,23 @@ func NewClientCodec(conn io.ReadWriteCloser, protocol Protocol, supportOnewayReq
 		transport: conn,
 		protocol:  protocol,
 	}
+	if supportOnewayRequests {
+		c.enableOneway = true
+		c.onewayRequests = make(chan pendingRequest, maxPendingRequests)
+		c.twowayRequests = make(chan pendingRequest, maxPendingRequests)
+	}
+	return c
+}
+
+func NewClientCodecWithBuffer(conn io.ReadWriteCloser, protocol Protocol, supportOnewayRequests bool, size int) rpc.ClientCodec {
+	c := &clientCodec{
+		protocol: protocol,
+	}
+
+	if c.transport = newBufferRWCF(conn, size); c.transport == nil {
+		return nil
+	}
+
 	if supportOnewayRequests {
 		c.enableOneway = true
 		c.onewayRequests = make(chan pendingRequest, maxPendingRequests)
