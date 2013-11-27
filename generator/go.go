@@ -303,6 +303,21 @@ func (g *GoGenerator) writeStruct(out io.Writer, st *parser.Struct) error {
 	for _, field := range st.Fields {
 		g.write(out, "\t%s\n", g.formatField(field))
 	}
+	g.write(out, "}\n")
+
+	g.write(out, "\nfunc New%s() *%s {\n", structName, structName)
+	g.write(out, "\treturn &%s{", structName)
+	hasDefaults := false
+	for _, field := range st.Fields {
+		if field.Default != nil {
+			hasDefaults = true
+			g.write(out, "\n\t\t%s: %v,", field.Name, field.Default)
+		}
+	}
+	if hasDefaults {
+		g.write(out, "\n")
+	}
+	g.write(out, "\t}\n")
 	return g.write(out, "}\n")
 }
 
