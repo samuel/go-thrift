@@ -614,7 +614,7 @@ func (g *GoGenerator) Generate(outPath string) (err error) {
 			}
 		}
 
-		fi, err := os.OpenFile(outfile, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0644)
+		fi, err := os.OpenFile(outfile, os.O_WRONLY|os.O_CREATE, 0644)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "%s\n", err.Error())
 			os.Exit(2)
