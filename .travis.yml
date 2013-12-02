@@ -1,6 +1,7 @@
 language: go
 go:
   - 1.1.2
+  - 1.2
   - tip
 
 branches:
@@ -19,3 +20,7 @@ script:
   - ./gen testfiles/cassandra.thrift tmp/
   - go build ./tmp/cassandra/
   - go vet ./tmp/cassandra/
+  - rm -rf ./tmp/cassandra
+  - ./gen -go.pointers=true testfiles/cassandra.thrift tmp/
+  - go build ./tmp/cassandra/
+  - go vet ./tmp/cassandra

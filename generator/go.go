@@ -84,6 +84,22 @@ var goKeywords = map[string]bool{
 	"var":         true,
 }
 
+var basicTypes = map[string]bool{
+	"byte":   true,
+	"bool":   true,
+	"string": true,
+	"i16":    true,
+	"i32":    true,
+	"i64":    true,
+	"double": true,
+}
+
+func init() {
+	if *flagGoBinarystring {
+		basicTypes["binary"] = true
+	}
+}
+
 func validGoIdent(id string) string {
 	if goKeywords[id] {
 		return "_" + id
@@ -210,9 +226,15 @@ func (g *GoGenerator) formatArguments(arguments []*parser.Field) string {
 	return strings.Join(args, ", ")
 }
 
-func (g *GoGenerator) formatReturnType(typ *parser.Type) string {
+func (g *GoGenerator) formatReturnType(typ *parser.Type, named bool) string {
 	if typ == nil || typ.Name == "void" {
+		if named {
+			return "(err error)"
+		}
 		return "error"
+	}
+	if named {
+		return fmt.Sprintf("(ret %s, err error)", g.formatType(g.pkg, g.thrift, typ, false))
 	}
 	return fmt.Sprintf("(%s, error)", g.formatType(g.pkg, g.thrift, typ, false))
 }
@@ -344,7 +366,7 @@ func (g *GoGenerator) writeService(out io.Writer, svc *parser.Service) error {
 		g.write(out,
 			"\t%s(%s) %s\n",
 			camelCase(method.Name), g.formatArguments(method.Arguments),
-			g.formatReturnType(method.ReturnType))
+			g.formatReturnType(method.ReturnType, false))
 	}
 	g.write(out, "}\n")
 
@@ -385,7 +407,11 @@ func (g *GoGenerator) writeService(out io.Writer, svc *parser.Service) error {
 			g.write(out, "\t}\n")
 		}
 		if !isVoid {
-			g.write(out, "\tres.Value = val\n")
+			if !*flagGoPointers && basicTypes[method.ReturnType.Name] {
+				g.write(out, "\tres.Value = &val\n")
+			} else {
+				g.write(out, "\tres.Value = val\n")
+			}
 		}
 		g.write(out, "\treturn err\n}\n")
 	}
@@ -404,7 +430,7 @@ func (g *GoGenerator) writeService(out io.Writer, svc *parser.Service) error {
 			// Response struct
 			args := make([]*parser.Field, 0, len(method.Exceptions))
 			if method.ReturnType != nil && method.ReturnType.Name != "void" {
-				args = append(args, &parser.Field{Id: 0, Name: "value", Optional: false /*len(method.Exceptions) != 0*/, Type: method.ReturnType, Default: nil})
+				args = append(args, &parser.Field{Id: 0, Name: "value", Optional: true /*len(method.Exceptions) != 0*/, Type: method.ReturnType, Default: nil})
 			}
 			for _, ex := range method.Exceptions {
 				args = append(args, ex)
@@ -425,9 +451,9 @@ func (g *GoGenerator) writeService(out io.Writer, svc *parser.Service) error {
 	for _, k := range methodNames {
 		method := svc.Methods[k]
 		methodName := camelCase(method.Name)
-		returnType := "error"
+		returnType := "err error"
 		if !method.Oneway {
-			returnType = g.formatReturnType(method.ReturnType)
+			returnType = g.formatReturnType(method.ReturnType, true)
 		}
 		g.write(out, "\nfunc (s *%sClient) %s(%s) %s {\n",
 			svcName, methodName,
@@ -450,7 +476,7 @@ func (g *GoGenerator) writeService(out io.Writer, svc *parser.Service) error {
 		}
 
 		// Call
-		g.write(out, "\terr := s.Client.Call(\"%s\", req, res)\n", method.Name)
+		g.write(out, "\terr = s.Client.Call(\"%s\", req, res)\n", method.Name)
 
 		// Exceptions
 		if len(method.Exceptions) > 0 {
@@ -463,10 +489,13 @@ func (g *GoGenerator) writeService(out io.Writer, svc *parser.Service) error {
 		}
 
 		if method.ReturnType != nil && method.ReturnType.Name != "void" {
-			g.write(out, "\treturn res.Value, err\n")
-		} else {
-			g.write(out, "\treturn err\n")
+			if !*flagGoPointers && basicTypes[method.ReturnType.Name] {
+				g.write(out, "\tif err == nil && res.Value != nil {\n\t ret = *res.Value\n}\n")
+			} else {
+				g.write(out, "\tif err == nil {\n\tret = res.Value\n}\n")
+			}
 		}
+		g.write(out, "\treturn\n")
 		g.write(out, "}\n")
 	}
 
