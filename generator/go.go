@@ -613,7 +613,7 @@ func (g *GoGenerator) Generate(outPath string) (err error) {
 			}
 		}
 
-		fi, err := os.OpenFile(outfile, os.O_WRONLY|os.O_CREATE, 0644)
+		fi, err := os.OpenFile(outfile, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "%s\n", err.Error())
 			os.Exit(2)
@@ -628,7 +628,7 @@ func (g *GoGenerator) Generate(outPath string) (err error) {
 	for path, name := range rpcPackages {
 		outfile := filepath.Join(path, "rpc_stub.go")
 
-		fi, err := os.OpenFile(outfile, os.O_WRONLY|os.O_CREATE, 0644)
+		fi, err := os.OpenFile(outfile, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "%s\n", err.Error())
 			os.Exit(2)
