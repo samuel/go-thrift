@@ -482,12 +482,9 @@ func (g *GoGenerator) generateSingle(out io.Writer, thriftPath string, thrift *p
 	g.write(out, "\npackage %s\n", packageName)
 
 	// Imports
-	imports := []string{}
+	imports := []string{"fmt"}
 	if len(thrift.Enums) > 0 {
 		imports = append(imports, "strconv")
-	}
-	if len(thrift.Enums) > 0 || len(thrift.Exceptions) > 0 {
-		imports = append(imports, "fmt")
 	}
 	if len(thrift.Includes) > 0 {
 		for _, path := range thrift.Includes {
@@ -504,6 +501,8 @@ func (g *GoGenerator) generateSingle(out io.Writer, thriftPath string, thrift *p
 		}
 		g.write(out, ")\n")
 	}
+
+	g.write(out, "\nvar _ = fmt.Printf\n")
 
 	//
 
@@ -535,12 +534,6 @@ func (g *GoGenerator) generateSingle(out io.Writer, thriftPath string, thrift *p
 		if err := g.writeException(out, ex); err != nil {
 			g.error(err)
 		}
-	}
-
-	if len(thrift.Services) > 0 {
-		g.write(out, "\ntype RPCClient interface {\n"+
-			"\tCall(method string, request interface{}, response interface{}) error\n"+
-			"}\n")
 	}
 
 	for _, k := range sortedKeys(thrift.Services) {
@@ -587,6 +580,8 @@ func (g *GoGenerator) Generate(outPath string) (err error) {
 		}
 	}
 
+	rpcPackages := map[string]string{}
+
 	for path, th := range g.ThriftFiles {
 		pkg := g.Packages[path]
 		filename := strings.ToLower(filepath.Base(path))
@@ -606,6 +601,10 @@ func (g *GoGenerator) Generate(outPath string) (err error) {
 		out := &bytes.Buffer{}
 		g.generateSingle(out, path, th)
 
+		if len(th.Services) > 0 {
+			rpcPackages[pkgpath] = pkg.Name
+		}
+
 		outBytes := out.Bytes()
 		if true {
 			outBytes, err = format.Source(outBytes)
@@ -624,6 +623,24 @@ func (g *GoGenerator) Generate(outPath string) (err error) {
 			g.error(err)
 		}
 		fi.Close()
+	}
+
+	for path, name := range rpcPackages {
+		outfile := filepath.Join(path, "rpc_stub.go")
+
+		fi, err := os.OpenFile(outfile, os.O_WRONLY|os.O_CREATE, 0644)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "%s\n", err.Error())
+			os.Exit(2)
+		}
+		_, err = fi.WriteString(fmt.Sprintf("package %s\n\ntype RPCClient interface {\n"+
+			"\tCall(method string, request interface{}, response interface{}) error\n"+
+			"}\n", name))
+		fi.Close()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "%s\n", err.Error())
+			os.Exit(2)
+		}
 	}
 
 	return nil
