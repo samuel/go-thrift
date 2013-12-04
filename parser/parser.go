@@ -69,15 +69,16 @@ var (
 func quotedString() parser.Parser {
 	return func(st *parser.State) (parser.Output, bool, error) {
 		next, err := st.Input.Next()
-		if err != nil || next != '"' {
+		if err != nil || (next != '"' && next != '\'') {
 			return nil, false, err
 		}
+		quote := next
 
 		st.Input.Pop(1)
 
 		escaped := false
 		runes := make([]rune, 1, 8)
-		runes[0] = '"'
+		runes[0] = quote
 		for {
 			next, err := st.Input.Next()
 			if err != nil {
@@ -102,7 +103,7 @@ func quotedString() parser.Parser {
 					runes = append(runes, next)
 				}
 
-				if next == '"' {
+				if next == quote {
 					break
 				}
 			}
