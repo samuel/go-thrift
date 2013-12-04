@@ -11,7 +11,9 @@ import (
 func TestServerMethodName(t *testing.T) {
 	buf := &ClosingBuffer{&bytes.Buffer{}}
 	clientCodec := NewClientCodec(buf, NewBinaryProtocol(true, false), false)
+	defer clientCodec.Close()
 	serverCodec := NewServerCodec(buf, NewBinaryProtocol(true, false))
+	defer serverCodec.Close()
 	req := &rpc.Request{
 		ServiceMethod: "some_method",
 		Seq:           3,

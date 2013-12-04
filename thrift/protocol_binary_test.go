@@ -224,6 +224,8 @@ func TestBinaryProtocolBadStringLength(t *testing.T) {
 
 func TestBinaryProtocol(t *testing.T) {
 	testProtocol(t, NewBinaryProtocol(true, false))
+	testProtocol(t, NewBinaryProtocol(false, false))
+	testProtocol(t, NewBinaryProtocol(true, true))
 }
 
 func BenchmarkBinaryProtocolReadByte(b *testing.B) {

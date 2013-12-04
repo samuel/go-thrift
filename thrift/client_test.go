@@ -25,6 +25,14 @@ type TestRequest struct {
 	Value int32 `thrift:"1,required"`
 }
 
+type TestOneWayRequest struct {
+	Value int32 `thrift:"1,required"`
+}
+
+func (req *TestOneWayRequest) Oneway() bool {
+	return true
+}
+
 func (tr *TestRequest) EncodeThrift(w io.Writer, proto Protocol) error {
 	if err := proto.WriteStructBegin(w, "TestRequest"); err != nil {
 		return err
@@ -174,6 +182,19 @@ func TestRPCClientSuccess(t *testing.T) {
 	}
 	if res.Value != req.Value {
 		t.Fatalf("Response value wrong: %d != %d", res.Value, req.Value)
+	}
+}
+
+func TestRPCClientOneWay(t *testing.T) {
+	once.Do(startServer)
+
+	c, err := Dial("tcp", serverAddr, true, NewBinaryProtocol(true, false), true)
+	if err != nil {
+		t.Fatalf("NewClient returned error: %+v", err)
+	}
+	req := &TestOneWayRequest{123}
+	if err := c.Call("Success", req, nil); err != nil {
+		t.Fatalf("Client.Call returned error: %+v", err)
 	}
 }
 
