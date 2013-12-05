@@ -25,6 +25,7 @@ var (
 	flagGoBinarystring = flag.Bool("go.binarystring", false, "Always use string for binary instead of []byte")
 	flagGoJsonEnumnum  = flag.Bool("go.json.enumnum", false, "For JSON marshal enums by number instead of name")
 	flagGoPointers     = flag.Bool("go.pointers", false, "Make all fields pointers")
+	flagGoRPCStyle     = flag.Bool("go.rpcstyle", false, "Generate Go RPC style service methods.")
 )
 
 var (
@@ -363,22 +364,33 @@ func (g *GoGenerator) writeService(out io.Writer, svc *parser.Service) error {
 	methodNames := sortedKeys(svc.Methods)
 	for _, k := range methodNames {
 		method := svc.Methods[k]
+		methodArguments := method.Arguments
+		methodReturnType := method.ReturnType
+		if *flagGoRPCStyle {
+			// In Go RPC Style, reply passed as pointer argument. Response an error type.
+			methodArguments = append(methodArguments, &parser.Field{Id: 2, Name: "reply", Optional: false, Type: method.ReturnType, Default: nil})
+			methodReturnType = nil
+		}
 		g.write(out,
 			"\t%s(%s) %s\n",
-			camelCase(method.Name), g.formatArguments(method.Arguments),
-			g.formatReturnType(method.ReturnType, false))
+			camelCase(method.Name), g.formatArguments(methodArguments),
+			g.formatReturnType(methodReturnType, false))
 	}
 	g.write(out, "}\n")
 
-	// Server
+	// Service
 
 	if svc.Extends == "" {
-		g.write(out, "\ntype %sServer struct {\n\tImplementation %s\n}\n", svcName, svcName)
+		g.write(out, "\ntype %sService struct {\n\tImplementation %s\n}\n", svcName, svcName)
 	} else {
-		g.write(out, "\ntype %sServer struct {\n\t%sServer\n\tImplementation %s\n}\n", svcName, camelCase(svc.Extends), svcName)
+		g.write(out, "\ntype %sService struct {\n\t%sService\n\tImplementation %s\n}\n", svcName, camelCase(svc.Extends), svcName)
 	}
 
-	// Server method wrappers
+	// Thrift Service constructor
+	g.write(out, "\nfunc New%sService(service %s) *%sService {\n", svcName, svcName, svcName)
+	g.write(out, "\treturn &%sService{service}\n}\n", svcName)
+
+	// Service method wrappers
 
 	for _, k := range methodNames {
 		method := svc.Methods[k]
@@ -387,15 +399,23 @@ func (g *GoGenerator) writeService(out io.Writer, svc *parser.Service) error {
 		if !method.Oneway {
 			resArg = fmt.Sprintf(", res *%s%sResponse", svcName, mName)
 		}
-		g.write(out, "\nfunc (s *%sServer) %s(req *%s%sRequest%s) error {\n", svcName, mName, svcName, mName, resArg)
+		g.write(out, "\nfunc (s *%sService) %s(req *%s%sRequest%s) error {\n", svcName, mName, svcName, mName, resArg)
+		if *flagGoRPCStyle {
+			// In Go RPC Style, initialize new reply in response.
+			g.write(out, "\tres.Value = new(%s)\n", method.ReturnType.Name)
+		}
 		args := make([]string, 0)
 		for _, arg := range method.Arguments {
 			aName := camelCase(arg.Name)
 			args = append(args, "req."+aName)
 		}
+		if *flagGoRPCStyle {
+			// In Go RPC Style, pass Reply to method implementation.
+			args = append(args, "res.Value")
+		}
 		isVoid := method.ReturnType == nil || method.ReturnType.Name == "void"
 		val := ""
-		if !isVoid {
+		if !isVoid && !*flagGoRPCStyle{
 			val = "val, "
 		}
 		g.write(out, "\t%serr := s.Implementation.%s(%s)\n", val, mName, strings.Join(args, ", "))
@@ -406,7 +426,7 @@ func (g *GoGenerator) writeService(out io.Writer, svc *parser.Service) error {
 			}
 			g.write(out, "\t}\n")
 		}
-		if !isVoid {
+		if !isVoid && !*flagGoRPCStyle {
 			if !*flagGoPointers && basicTypes[method.ReturnType.Name] {
 				g.write(out, "\tres.Value = &val\n")
 			} else {
@@ -442,11 +462,17 @@ func (g *GoGenerator) writeService(out io.Writer, svc *parser.Service) error {
 		}
 	}
 
+	// Thrift Client
+
 	if svc.Extends == "" {
 		g.write(out, "\ntype %sClient struct {\n\tClient RPCClient\n}\n", svcName)
 	} else {
 		g.write(out, "\ntype %sClient struct {\n\t%sClient\n}\n", svcName, camelCase(svc.Extends))
 	}
+
+	// Thrift Client constructor
+	g.write(out, "\nfunc New%sClient(rpcClient RPCClient) *%sClient {\n", svcName, svcName)
+	g.write(out, "\treturn &%sClient{rpcClient}\n}\n", svcName)
 
 	for _, k := range methodNames {
 		method := svc.Methods[k]
@@ -455,9 +481,15 @@ func (g *GoGenerator) writeService(out io.Writer, svc *parser.Service) error {
 		if !method.Oneway {
 			returnType = g.formatReturnType(method.ReturnType, true)
 		}
+		clientMethodArguments := method.Arguments
+		if *flagGoRPCStyle {
+			// In Go RPC Style, reply passed to thrift client method. Response is error type.
+			clientMethodArguments = append(clientMethodArguments, &parser.Field{Id: 2, Name: "reply", Optional: false, Type: method.ReturnType, Default: nil})
+			returnType = "error" 
+		}
 		g.write(out, "\nfunc (s *%sClient) %s(%s) %s {\n",
 			svcName, methodName,
-			g.formatArguments(method.Arguments),
+			g.formatArguments(clientMethodArguments),
 			returnType)
 
 		// Request
@@ -471,12 +503,19 @@ func (g *GoGenerator) writeService(out io.Writer, svc *parser.Service) error {
 		if method.Oneway {
 			// g.write(out, "\tvar res *%s%sResponse = nil\n", svcName, methodName)
 			g.write(out, "\tvar res interface{} = nil\n")
-		} else {
+		} else if *flagGoRPCStyle {
+    	// In GO RPC style, pass reply in response so it can be mutated by service method impl.
+      g.write(out, "\tres := &%s%sResponse{%s: %s}\n", svcName, methodName, camelCase("value"), validGoIdent(lowerCamelCase("reply")))
+    } else {
 			g.write(out, "\tres := &%s%sResponse{}\n", svcName, methodName)
 		}
 
 		// Call
-		g.write(out, "\terr = s.Client.Call(\"%s\", req, res)\n", method.Name)
+		if *flagGoRPCStyle {
+			g.write(out, "\terr := s.Client.Call(\"%s\", req, res)\n", method.Name)
+		} else {
+			g.write(out, "\terr = s.Client.Call(\"%s\", req, res)\n", method.Name)
+		}
 
 		// Exceptions
 		if len(method.Exceptions) > 0 {
@@ -488,15 +527,20 @@ func (g *GoGenerator) writeService(out io.Writer, svc *parser.Service) error {
 			g.write(out, "\t\t}\n\t}\n")
 		}
 
-		if method.ReturnType != nil && method.ReturnType.Name != "void" {
-			if !*flagGoPointers && basicTypes[method.ReturnType.Name] {
-				g.write(out, "\tif err == nil && res.Value != nil {\n\t ret = *res.Value\n}\n")
-			} else {
-				g.write(out, "\tif err == nil {\n\tret = res.Value\n}\n")
-			}
+		if *flagGoRPCStyle {
+			g.write(out, "\treturn err\n")
+			g.write(out, "}\n")
+		} else {
+			if method.ReturnType != nil && method.ReturnType.Name != "void" && !*flagGoRPCStyle {
+				if !*flagGoPointers && basicTypes[method.ReturnType.Name] {
+					g.write(out, "\tif err == nil && res.Value != nil {\n\t ret = *res.Value\n}\n")
+				} else {
+					g.write(out, "\tif err == nil {\n\tret = res.Value\n}\n")
+				}
+			} 
+			g.write(out, "\treturn\n")
+			g.write(out, "}\n")
 		}
-		g.write(out, "\treturn\n")
-		g.write(out, "}\n")
 	}
 
 	return nil
