@@ -120,8 +120,11 @@ func (g *GoGenerator) write(w io.Writer, f string, a ...interface{}) error {
 }
 
 func (g *GoGenerator) formatType(pkg string, thrift *parser.Thrift, typ *parser.Type, optional bool) string {
+	// Follow includes
 	if strings.Contains(typ.Name, ".") {
+		// <include>.<type>
 		parts := strings.SplitN(typ.Name, ".", 2)
+		// Get Thrift struct for the given include
 		thriftFilename := thrift.Includes[parts[0]]
 		if thriftFilename == "" {
 			g.error(ErrMissingInclude(parts[0]))

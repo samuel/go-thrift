@@ -17,6 +17,7 @@ script:
   - go test -v -race ./...
   - go build -o gen ./generator/ 
   - mkdir tmp
+  # cassandra.thrift
   - ./gen testfiles/cassandra.thrift tmp/
   - go build ./tmp/cassandra/
   - go vet ./tmp/cassandra/
@@ -24,3 +25,11 @@ script:
   - ./gen -go.pointers=true testfiles/cassandra.thrift tmp/
   - go build ./tmp/cassandra/
   - go vet ./tmp/cassandra
+  # Hbase.thrift
+  - ./gen testfiles/Hbase.thrift tmp/
+  - go build ./tmp/hbase/
+  - go vet ./tmp/hbase/
+  - rm -rf ./tmp/hbase
+  - ./gen -go.pointers=true testfiles/Hbase.thrift tmp/
+  - go build ./tmp/hbase/
+  - go vet ./tmp/hbase

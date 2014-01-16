@@ -10,6 +10,7 @@ import (
 	"io"
 	"reflect"
 	"testing"
+	"time"
 )
 
 type TestStruct2 struct {
@@ -53,19 +54,20 @@ func (s *IntSet) DecodeThrift(r io.Reader, p Protocol) error {
 }
 
 type TestStruct struct {
-	String  string              `thrift:"1"`
-	Int     *int                `thrift:"2"`
-	List    []string            `thrift:"3"`
-	Map     map[string]string   `thrift:"4"`
-	Struct  *TestStruct2        `thrift:"5"`
-	List2   []*string           `thrift:"6"`
-	Struct2 TestStruct2         `thrift:"7"`
-	Binary  []byte              `thrift:"8"`
-	Set     []string            `thrift:"9,set"`
-	Set2    map[string]struct{} `thrift:"10"`
-	Set3    map[string]bool     `thrift:"11,set"`
-	Uint32  uint32              `thrift:"12"`
-	Uint64  uint64              `thrift:"13"`
+	String   string              `thrift:"1"`
+	Int      *int                `thrift:"2"`
+	List     []string            `thrift:"3"`
+	Map      map[string]string   `thrift:"4"`
+	Struct   *TestStruct2        `thrift:"5"`
+	List2    []*string           `thrift:"6"`
+	Struct2  TestStruct2         `thrift:"7"`
+	Binary   []byte              `thrift:"8"`
+	Set      []string            `thrift:"9,set"`
+	Set2     map[string]struct{} `thrift:"10"`
+	Set3     map[string]bool     `thrift:"11,set"`
+	Uint32   uint32              `thrift:"12"`
+	Uint64   uint64              `thrift:"13"`
+	Duration time.Duration       `thrift:"14"`
 }
 
 type TestStructRequiredOptional struct {
@@ -151,6 +153,7 @@ func TestBasics(t *testing.T) {
 		map[string]bool{"q": true, "p": false},
 		1<<31 + 2,
 		1<<63 + 2,
+		time.Second,
 	}
 	buf := &bytes.Buffer{}
 
