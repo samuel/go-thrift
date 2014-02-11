@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	compactProtocolId      = 0x82
+	compactProtocolID      = 0x82
 	compactVersion         = 1
 	compactVersionMask     = 0x1f
 	compactTypeMask        = 0xe0
@@ -68,7 +68,7 @@ func init() {
 }
 
 type compactProtocol struct {
-	lastFieldId int16
+	lastFieldID int16
 	boolFid     int16
 	boolValue   bool
 	structs     []int16
@@ -79,7 +79,7 @@ type compactProtocol struct {
 
 func NewCompactProtocol() Protocol {
 	return &compactProtocol{
-		lastFieldId: 0,
+		lastFieldID: 0,
 		boolFid:     -1,
 		boolValue:   false,
 		structs:     make([]int16, 0, 8),
@@ -148,7 +148,7 @@ func (p *compactProtocol) readUvarint(r io.Reader) (uint64, error) {
 // Write a message header to the wire. Compact Protocol messages contain the
 // protocol version so we can migrate forwards in the future if need be.
 func (p *compactProtocol) WriteMessageBegin(w io.Writer, name string, messageType byte, seqid int32) (err error) {
-	if err = p.writeByteDirect(w, compactProtocolId); err != nil {
+	if err = p.writeByteDirect(w, compactProtocolID); err != nil {
 		return
 	}
 	if err = p.writeByteDirect(w, compactVersion|(messageType<<compactTypeShiftAmount)); err != nil {
@@ -165,8 +165,8 @@ func (p *compactProtocol) WriteMessageBegin(w io.Writer, name string, messageTyp
 // use it as an opportunity to put special placeholder markers on the field
 // stack so we can get the field id deltas correct.
 func (p *compactProtocol) WriteStructBegin(w io.Writer, name string) error {
-	p.structs = append(p.structs, p.lastFieldId)
-	p.lastFieldId = 0
+	p.structs = append(p.structs, p.lastFieldID)
+	p.lastFieldID = 0
 	return nil
 }
 
@@ -179,7 +179,7 @@ func (p *compactProtocol) WriteStructEnd(w io.Writer) error {
 	}
 	fid := p.structs[len(p.structs)-1]
 	p.structs = p.structs[:len(p.structs)-1]
-	p.lastFieldId = fid
+	p.lastFieldID = fid
 	return nil
 }
 
@@ -207,9 +207,9 @@ func (p *compactProtocol) writeFieldBeginInternal(w io.Writer, name string, fiel
 	}
 
 	// check if we can use delta encoding for the field id
-	if id > p.lastFieldId && id-p.lastFieldId <= 15 {
+	if id > p.lastFieldID && id-p.lastFieldID <= 15 {
 		// write them together
-		if err := p.writeByteDirect(w, byte((id-p.lastFieldId)<<4|int16(typeToWrite))); err != nil {
+		if err := p.writeByteDirect(w, byte((id-p.lastFieldID)<<4|int16(typeToWrite))); err != nil {
 			return err
 		}
 	} else {
@@ -222,7 +222,7 @@ func (p *compactProtocol) writeFieldBeginInternal(w io.Writer, name string, fiel
 		}
 	}
 
-	p.lastFieldId = id
+	p.lastFieldID = id
 	return nil
 }
 
@@ -347,11 +347,11 @@ func (p *compactProtocol) writeByteDirect(w io.Writer, value byte) error {
 }
 
 func (p *compactProtocol) ReadMessageBegin(r io.Reader) (string, byte, int32, error) {
-	protocolId, err := p.ReadByte(r)
+	protocolID, err := p.ReadByte(r)
 	if err != nil {
 		return "", 0, -1, err
 	}
-	if protocolId != compactProtocolId {
+	if protocolID != compactProtocolID {
 		return "", 0, -1, ProtocolError{"CompactProtocol", "invalid compact protocol ID"}
 	}
 	versionAndType, err := p.ReadByte(r)
@@ -363,7 +363,7 @@ func (p *compactProtocol) ReadMessageBegin(r io.Reader) (string, byte, int32, er
 		return "", 0, -1, ProtocolError{"CompactProtocol", "invalid compact protocol version"}
 	}
 	msgType := (versionAndType >> compactTypeShiftAmount) & 0x03
-	seqId, err := p.readUvarint(r)
+	seqID, err := p.readUvarint(r)
 	if err != nil {
 		return "", 0, -1, err
 	}
@@ -371,14 +371,14 @@ func (p *compactProtocol) ReadMessageBegin(r io.Reader) (string, byte, int32, er
 	if err != nil {
 		return "", 0, -1, err
 	}
-	return msgName, msgType, int32(seqId), nil
+	return msgName, msgType, int32(seqID), nil
 }
 
 // Read a struct begin. There's nothing on the wire for this, but it is our
 // opportunity to push a new struct begin marker onto the field stack.
 func (p *compactProtocol) ReadStructBegin(r io.Reader) error {
-	p.structs = append(p.structs, p.lastFieldId)
-	p.lastFieldId = 0
+	p.structs = append(p.structs, p.lastFieldID)
+	p.lastFieldID = 0
 	return nil
 }
 
@@ -386,7 +386,7 @@ func (p *compactProtocol) ReadStructBegin(r io.Reader) error {
 // this struct from the field stack.
 func (p *compactProtocol) ReadStructEnd(r io.Reader) error {
 	// consume the last field we read off the wire
-	p.lastFieldId = p.structs[len(p.structs)-1]
+	p.lastFieldID = p.structs[len(p.structs)-1]
 	p.structs = p.structs[:len(p.structs)-1]
 	return nil
 }
@@ -404,17 +404,17 @@ func (p *compactProtocol) ReadFieldBegin(r io.Reader) (byte, int16, error) {
 	}
 
 	// mask off the 4 MSB of the type header. it could contain a field id delta.
-	var fieldId int16
+	var fieldID int16
 	modifier := int16((compactType & 0xf0) >> 4)
 	if modifier == 0 {
 		// not a delta. look ahead for the zigzag varint field id.
-		fieldId, err = p.ReadI16(r)
+		fieldID, err = p.ReadI16(r)
 		if err != nil {
-			return 0, fieldId, err
+			return 0, fieldID, err
 		}
 	} else {
 		// has a delta. add the delta to the last read field id
-		fieldId = p.lastFieldId + modifier
+		fieldID = p.lastFieldID + modifier
 	}
 
 	fieldType := compactTypeToThriftType[compactType&0x0f]
@@ -423,12 +423,12 @@ func (p *compactProtocol) ReadFieldBegin(r io.Reader) (byte, int16, error) {
 	if fieldType == TypeBool {
 		// save the boolean value in a special instance variable.
 		p.boolValue = (compactType & 0x0f) == ctTrue
-		p.boolFid = fieldId
+		p.boolFid = fieldID
 	}
 
 	// push the new field onto the field stack so we can keep the deltas going.
-	p.lastFieldId = fieldId
-	return fieldType, fieldId, nil
+	p.lastFieldID = fieldID
+	return fieldType, fieldID, nil
 }
 
 // Read a map header off the wire. If the size is zero, skip reading the key

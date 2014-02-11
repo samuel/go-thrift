@@ -12,6 +12,7 @@ import (
 )
 
 const (
+	// DefaultMaxFrameSize is the default max size for frames when using the FramedReadWriteCloser
 	DefaultMaxFrameSize = 1024 * 1024
 )
 

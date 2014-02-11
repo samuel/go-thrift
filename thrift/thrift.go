@@ -8,6 +8,7 @@ import (
 	"sync"
 )
 
+// Type identifiers for serialized Thrift
 const (
 	TypeStop   = 0
 	TypeVoid   = 1
@@ -28,6 +29,7 @@ const (
 	TypeUtf16  = 17
 )
 
+// Message types for RPC
 const (
 	MessageTypeCall      = 1
 	MessageTypeReply     = 2
@@ -35,12 +37,13 @@ const (
 	MessageTypeOneway    = 4
 )
 
+// Exception types for RPC responses
 const (
 	ExceptionUnknown            = 0
 	ExceptionUnknownMethod      = 1
 	ExceptionInvalidMessageType = 2
 	ExceptionWrongMethodName    = 3
-	ExceptionBadSequenceId      = 4
+	ExceptionBadSequenceID      = 4
 	ExceptionMissingResult      = 5
 	ExceptionInternalError      = 6
 	ExceptionProtocolError      = 7
@@ -72,7 +75,7 @@ func (e *UnsupportedValueError) Error() string {
 	return fmt.Sprintf("thrift: unsupported value (%+v): %s", e.Value, e.Str)
 }
 
-// Application level thrift exception
+// ApplicationException is an application level thrift exception
 type ApplicationException struct {
 	Message string `thrift:"1"`
 	Type    int32  `thrift:"2"`
@@ -87,8 +90,8 @@ func (e *ApplicationException) String() string {
 		typeStr = "Invalid Message Type"
 	case ExceptionWrongMethodName:
 		typeStr = "Wrong Method Name"
-	case ExceptionBadSequenceId:
-		typeStr = "Bad Sequence Id"
+	case ExceptionBadSequenceID:
+		typeStr = "Bad Sequence ID"
 	case ExceptionMissingResult:
 		typeStr = "Missing Result"
 	case ExceptionInternalError:
@@ -123,9 +126,8 @@ func fieldType(t reflect.Type) byte {
 		elemType := t.Elem()
 		if elemType.Kind() == reflect.Uint8 {
 			return TypeString
-		} else {
-			return TypeList
 		}
+		return TypeList
 	case reflect.Struct:
 		return TypeStruct
 	case reflect.String:

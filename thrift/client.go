@@ -30,8 +30,12 @@ type oneway interface {
 }
 
 var (
+	// ErrTooManyPendingRequests is the error when there's too many requests that have been
+	// sent that have not yet received responses.
 	ErrTooManyPendingRequests = errors.New("thrift.client: too many pending requests")
-	ErrOnewayNotEnabled       = errors.New("thrift.client: one way support not enabled on codec")
+	// ErrOnewayNotEnabled is the error when trying to make a one-way RPC call but the
+	// client was not created with one-way support enabled.
+	ErrOnewayNotEnabled = errors.New("thrift.client: one way support not enabled on codec")
 )
 
 const maxPendingRequests = 1000

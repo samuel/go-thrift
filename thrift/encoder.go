@@ -10,6 +10,7 @@ import (
 	"runtime"
 )
 
+// Encoder is the interface that allows types to serialize themselves to a Thrift stream
 type Encoder interface {
 	EncodeThrift(io.Writer, Protocol) error
 }
@@ -19,6 +20,7 @@ type encoder struct {
 	p Protocol
 }
 
+// EncodeStruct tries to serialize a struct to a Thrift stream
 func EncodeStruct(w io.Writer, protocol Protocol, v interface{}) (err error) {
 	if en, ok := v.(Encoder); ok {
 		return en.EncodeThrift(w, protocol)
@@ -96,7 +98,7 @@ func (e *encoder) writeValue(v reflect.Value, thriftType byte) {
 		kind = v.Kind()
 	}
 
-	var err error = nil
+	var err error
 	switch thriftType {
 	case TypeBool:
 		err = e.p.WriteBool(e.w, v.Bool())

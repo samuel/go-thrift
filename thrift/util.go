@@ -9,6 +9,7 @@ import (
 	"unicode"
 )
 
+// CamelCase returns the string converted to camel case (e.g. some_name to SomeName)
 func CamelCase(s string) string {
 	prev := '_'
 	return strings.Map(

@@ -10,6 +10,7 @@ import (
 	"runtime"
 )
 
+// Decoder is the interface that allows types to deserialize themselves from a Thrift stream
 type Decoder interface {
 	DecodeThrift(io.Reader, Protocol) error
 }
@@ -19,6 +20,7 @@ type decoder struct {
 	p Protocol
 }
 
+// DecodeStruct tries to deserialize a struct from a Thrift stream
 func DecodeStruct(r io.Reader, protocol Protocol, v interface{}) (err error) {
 	if de, ok := v.(Decoder); ok {
 		return de.DecodeThrift(r, protocol)
@@ -66,7 +68,7 @@ func (d *decoder) readValue(thriftType byte, rf reflect.Value) {
 		return
 	}
 
-	var err error = nil
+	var err error
 	switch thriftType {
 	case TypeBool:
 		if val, err := d.p.ReadBool(d.r); err != nil {

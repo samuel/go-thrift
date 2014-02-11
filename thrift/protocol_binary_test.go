@@ -67,7 +67,7 @@ func testProtocol(t *testing.T, pr Protocol) {
 	}
 
 	testString := "012345"
-	for i := 0; i < 2; i += 1 {
+	for i := 0; i < 2; i++ {
 		if err := pr.WriteString(b, testString); err != nil {
 			t.Fatalf("write string failed: %+v", err)
 		}
@@ -130,14 +130,14 @@ func testProtocol(t *testing.T, pr Protocol) {
 
 	// Read the message
 
-	if name, mtype, seqId, err := pr.ReadMessageBegin(b); err != nil {
+	if name, mtype, seqID, err := pr.ReadMessageBegin(b); err != nil {
 		t.Fatalf("ReadMessageBegin failed: %+v", err)
 	} else if name != "msgName" {
 		t.Fatalf("ReadMessageBegin name mismatch: %s != %s", name, "msgName")
 	} else if mtype != 2 {
 		t.Fatalf("ReadMessageBegin type mismatch: %d != %d", mtype, 2)
-	} else if seqId != 123 {
-		t.Fatalf("ReadMessageBegin seqId mismatch: %d != %d", seqId, 123)
+	} else if seqID != 123 {
+		t.Fatalf("ReadMessageBegin seqID mismatch: %d != %d", seqID, 123)
 	}
 	if err := pr.ReadStructBegin(b); err != nil {
 		t.Fatalf("ReadStructBegin failed: %+v", err)
