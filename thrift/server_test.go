@@ -10,9 +10,9 @@ import (
 // in the response as was in the request.
 func TestServerMethodName(t *testing.T) {
 	buf := &ClosingBuffer{&bytes.Buffer{}}
-	clientCodec := NewClientCodec(buf, NewBinaryProtocol(true, false), false)
+	clientCodec := NewClientCodec(NewTransport(buf, BinaryProtocol), false)
 	defer clientCodec.Close()
-	serverCodec := NewServerCodec(buf, NewBinaryProtocol(true, false))
+	serverCodec := NewServerCodec(NewTransport(buf, BinaryProtocol))
 	defer serverCodec.Close()
 	req := &rpc.Request{
 		ServiceMethod: "some_method",

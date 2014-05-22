@@ -13,8 +13,7 @@ import (
 
 // Implements rpc.ClientCodec
 type clientCodec struct {
-	transport      io.ReadWriteCloser
-	protocol       Protocol
+	conn           Transport
 	onewayRequests chan pendingRequest
 	twowayRequests chan pendingRequest
 	enableOneway   bool
@@ -41,37 +40,36 @@ var (
 const maxPendingRequests = 1000
 
 // Dial connects to a Thrift RPC server at the specified network address using the specified protocol.
-func Dial(network, address string, framed bool, protocol Protocol, supportOnewayRequests bool) (*rpc.Client, error) {
+func Dial(network, address string, framed bool, protocol ProtocolBuilder, supportOnewayRequests bool) (*rpc.Client, error) {
 	conn, err := net.Dial(network, address)
 	if err != nil {
 		return nil, err
 	}
+	var c io.ReadWriteCloser = conn
+	if framed {
+		c = NewFramedReadWriteCloser(conn, DefaultMaxFrameSize)
+	}
 	codec := &clientCodec{
-		transport: conn,
-		protocol:  protocol,
+		conn: NewTransport(c, protocol),
 	}
 	if supportOnewayRequests {
 		codec.enableOneway = true
 		codec.onewayRequests = make(chan pendingRequest, maxPendingRequests)
 		codec.twowayRequests = make(chan pendingRequest, maxPendingRequests)
 	}
-	if framed {
-		codec.transport = NewFramedReadWriteCloser(conn, DefaultMaxFrameSize)
-	}
 	return rpc.NewClientWithCodec(codec), nil
 }
 
 // NewClient returns a new rpc.Client to handle requests to the set of
 // services at the other end of the connection.
-func NewClient(conn io.ReadWriteCloser, protocol Protocol, supportOnewayRequests bool) *rpc.Client {
-	return rpc.NewClientWithCodec(NewClientCodec(conn, protocol, supportOnewayRequests))
+func NewClient(conn Transport, supportOnewayRequests bool) *rpc.Client {
+	return rpc.NewClientWithCodec(NewClientCodec(conn, supportOnewayRequests))
 }
 
 // NewClientCodec returns a new rpc.ClientCodec using Thrift RPC on conn using the specified protocol.
-func NewClientCodec(conn io.ReadWriteCloser, protocol Protocol, supportOnewayRequests bool) rpc.ClientCodec {
+func NewClientCodec(conn Transport, supportOnewayRequests bool) rpc.ClientCodec {
 	c := &clientCodec{
-		transport: conn,
-		protocol:  protocol,
+		conn: conn,
 	}
 	if supportOnewayRequests {
 		c.enableOneway = true
@@ -82,43 +80,45 @@ func NewClientCodec(conn io.ReadWriteCloser, protocol Protocol, supportOnewayReq
 }
 
 func (c *clientCodec) WriteRequest(request *rpc.Request, thriftStruct interface{}) error {
-	if err := c.protocol.WriteMessageBegin(c.transport, request.ServiceMethod, MessageTypeCall, int32(request.Seq)); err != nil {
+	if err := c.conn.WriteMessageBegin(request.ServiceMethod, MessageTypeCall, int32(request.Seq)); err != nil {
 		return err
 	}
-	if err := EncodeStruct(c.transport, c.protocol, thriftStruct); err != nil {
+	if err := EncodeStruct(c.conn, thriftStruct); err != nil {
 		return err
 	}
-	if err := c.protocol.WriteMessageEnd(c.transport); err != nil {
+	if err := c.conn.WriteMessageEnd(); err != nil {
 		return err
 	}
-	var err error
-	if flusher, ok := c.transport.(Flusher); ok {
-		err = flusher.Flush()
+	if err := c.conn.Flush(); err != nil {
+		return err
 	}
-	if err == nil {
-		ow := false
-		if o, ok := thriftStruct.(oneway); ok {
-			ow = o.Oneway()
-		}
-		if c.enableOneway {
-			if ow {
-				select {
-				case c.onewayRequests <- pendingRequest{request.ServiceMethod, request.Seq}:
-				default:
-					err = ErrTooManyPendingRequests
-				}
-			} else {
-				select {
-				case c.twowayRequests <- pendingRequest{request.ServiceMethod, request.Seq}:
-				default:
-					err = ErrTooManyPendingRequests
-				}
+	ow := false
+	if o, ok := thriftStruct.(oneway); ok {
+		ow = o.Oneway()
+	}
+	if c.enableOneway {
+		var err error
+		if ow {
+			select {
+			case c.onewayRequests <- pendingRequest{request.ServiceMethod, request.Seq}:
+			default:
+				err = ErrTooManyPendingRequests
 			}
-		} else if ow {
-			return ErrOnewayNotEnabled
+		} else {
+			select {
+			case c.twowayRequests <- pendingRequest{request.ServiceMethod, request.Seq}:
+			default:
+				err = ErrTooManyPendingRequests
+			}
 		}
+		if err != nil {
+			return err
+		}
+	} else if ow {
+		return ErrOnewayNotEnabled
 	}
-	return err
+
+	return nil
 }
 
 func (c *clientCodec) ReadResponseHeader(response *rpc.Response) error {
@@ -132,7 +132,7 @@ func (c *clientCodec) ReadResponseHeader(response *rpc.Response) error {
 		}
 	}
 
-	name, messageType, seq, err := c.protocol.ReadMessageBegin(c.transport)
+	name, messageType, seq, err := c.conn.ReadMessageBegin()
 	if err != nil {
 		return err
 	}
@@ -140,11 +140,11 @@ func (c *clientCodec) ReadResponseHeader(response *rpc.Response) error {
 	response.Seq = uint64(seq)
 	if messageType == MessageTypeException {
 		exception := &ApplicationException{}
-		if err := DecodeStruct(c.transport, c.protocol, exception); err != nil {
+		if err := DecodeStruct(c.conn, exception); err != nil {
 			return err
 		}
 		response.Error = exception.String()
-		return c.protocol.ReadMessageEnd(c.transport)
+		return c.conn.ReadMessageEnd()
 	}
 	return nil
 }
@@ -156,13 +156,16 @@ func (c *clientCodec) ReadResponseBody(thriftStruct interface{}) error {
 		return nil
 	}
 
-	if err := DecodeStruct(c.transport, c.protocol, thriftStruct); err != nil {
+	if err := DecodeStruct(c.conn, thriftStruct); err != nil {
 		return err
 	}
 
-	return c.protocol.ReadMessageEnd(c.transport)
+	return c.conn.ReadMessageEnd()
 }
 
 func (c *clientCodec) Close() error {
-	return c.transport.Close()
+	if cl, ok := c.conn.(io.Closer); ok {
+		return cl.Close()
+	}
+	return nil
 }

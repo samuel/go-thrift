@@ -10,12 +10,11 @@ import (
 )
 
 func TestCompactProtocol(t *testing.T) {
-	testProtocol(t, NewCompactProtocol())
+	b := &bytes.Buffer{}
+	testProtocol(t, NewCompactProtocolReader(b), NewCompactProtocolWriter(b))
 }
 
 func TestCompactList(t *testing.T) {
-	p := NewCompactProtocol()
-
 	tests := []struct {
 		values []byte
 		bytes  []byte
@@ -29,16 +28,18 @@ func TestCompactList(t *testing.T) {
 	for _, exp := range tests {
 		expValue := exp.values
 		expBytes := exp.bytes
+
 		b := &bytes.Buffer{}
-		if err := p.WriteListBegin(b, TypeByte, len(expValue)); err != nil {
+		w := NewCompactProtocolWriter(b)
+		if err := w.WriteListBegin(TypeByte, len(expValue)); err != nil {
 			t.Fatalf("WriteListBegin returned an error: %+v", err)
 		}
 		for _, v := range expValue {
-			if err := p.WriteByte(b, v); err != nil {
+			if err := w.WriteByte(v); err != nil {
 				t.Fatalf("WriteByte returned an error: %+v", err)
 			}
 		}
-		if err := p.WriteListEnd(b); err != nil {
+		if err := w.WriteListEnd(); err != nil {
 			t.Fatalf("WriteListEnd returned an error: %+v", err)
 		}
 		out := b.Bytes()
@@ -47,7 +48,8 @@ func TestCompactList(t *testing.T) {
 		}
 
 		b = bytes.NewBuffer(expBytes)
-		etype, size, err := p.ReadListBegin(b)
+		r := NewCompactProtocolReader(b)
+		etype, size, err := r.ReadListBegin()
 		if err != nil {
 			t.Fatalf("ReadListBegin returned an error: %+v", err)
 		} else if etype != TypeByte {
@@ -56,21 +58,19 @@ func TestCompactList(t *testing.T) {
 			t.Fatalf("ReadListBegin returned wrong size %d insted of %d", size, len(expValue))
 		}
 		for i := 0; i < size; i++ {
-			if v, err := p.ReadByte(b); err != nil {
+			if v, err := r.ReadByte(); err != nil {
 				t.Fatalf("ReadByte returned an error: %+v", err)
 			} else if v != expValue[i] {
 				t.Fatalf("ReadByte returned wrong value %d insted of %d", v, expBytes[i])
 			}
 		}
-		if err := p.ReadListEnd(b); err != nil {
+		if err := r.ReadListEnd(); err != nil {
 			t.Fatalf("ReadListEnd returned an error: %+v", err)
 		}
 	}
 }
 
 func TestCompactString(t *testing.T) {
-	p := NewCompactProtocol()
-
 	expStrings := map[string][]byte{
 		"":    {0},
 		"foo": {3, 102, 111, 111},
@@ -78,7 +78,8 @@ func TestCompactString(t *testing.T) {
 
 	for expValue, expBytes := range expStrings {
 		b := &bytes.Buffer{}
-		err := p.WriteString(b, expValue)
+		w := NewCompactProtocolWriter(b)
+		err := w.WriteString(expValue)
 		if err != nil {
 			t.Fatalf("WriteString returned an error: %+v", err)
 		}
@@ -88,7 +89,8 @@ func TestCompactString(t *testing.T) {
 		}
 
 		b = bytes.NewBuffer(expBytes)
-		v, err := p.ReadString(b)
+		r := NewCompactProtocolReader(b)
+		v, err := r.ReadString()
 		if err != nil {
 			t.Fatalf("ReadString returned an error: %+v", err)
 		}
@@ -99,8 +101,6 @@ func TestCompactString(t *testing.T) {
 }
 
 func TestCompactI16(t *testing.T) {
-	p := NewCompactProtocol()
-
 	exp := map[int16][]byte{
 		0:     {0},
 		-1:    {1},
@@ -110,7 +110,8 @@ func TestCompactI16(t *testing.T) {
 
 	for expValue, expBytes := range exp {
 		b := &bytes.Buffer{}
-		err := p.WriteI16(b, expValue)
+		w := NewCompactProtocolWriter(b)
+		err := w.WriteI16(expValue)
 		if err != nil {
 			t.Fatalf("WriteI16 returned an error: %+v", err)
 		}
@@ -120,7 +121,8 @@ func TestCompactI16(t *testing.T) {
 		}
 
 		b = bytes.NewBuffer(expBytes)
-		v, err := p.ReadI16(b)
+		r := NewCompactProtocolReader(b)
+		v, err := r.ReadI16()
 		if err != nil {
 			t.Fatalf("ReadI16 returned an error: %+v", err)
 		}
@@ -131,8 +133,6 @@ func TestCompactI16(t *testing.T) {
 }
 
 func TestCompactI32(t *testing.T) {
-	p := NewCompactProtocol()
-
 	exp := map[int32][]byte{
 		0:          {0},
 		-1:         {1},
@@ -142,7 +142,8 @@ func TestCompactI32(t *testing.T) {
 
 	for expValue, expBytes := range exp {
 		b := &bytes.Buffer{}
-		err := p.WriteI32(b, expValue)
+		w := NewCompactProtocolWriter(b)
+		err := w.WriteI32(expValue)
 		if err != nil {
 			t.Fatalf("WriteI32 returned an error: %+v", err)
 		}
@@ -152,7 +153,8 @@ func TestCompactI32(t *testing.T) {
 		}
 
 		b = bytes.NewBuffer(expBytes)
-		v, err := p.ReadI32(b)
+		r := NewCompactProtocolReader(b)
+		v, err := r.ReadI32()
 		if err != nil {
 			t.Fatalf("Read32 returned an error: %+v", err)
 		}
@@ -164,72 +166,75 @@ func TestCompactI32(t *testing.T) {
 
 func BenchmarkCompactProtocolReadByte(b *testing.B) {
 	buf := &loopingReader{}
-	p := NewCompactProtocol()
-	p.WriteByte(buf, 123)
+	w := NewCompactProtocolWriter(buf)
+	r := NewCompactProtocolReader(buf)
+	w.WriteByte(123)
 	for i := 0; i < b.N; i++ {
-		p.ReadByte(buf)
+		r.ReadByte()
 	}
 }
 
 func BenchmarkCompactProtocolReadI32Small(b *testing.B) {
 	buf := &loopingReader{}
-	p := NewCompactProtocol()
-	p.WriteI32(buf, 1)
+	w := NewCompactProtocolWriter(buf)
+	r := NewCompactProtocolReader(buf)
+	w.WriteI32(1)
 	for i := 0; i < b.N; i++ {
-		p.ReadI32(buf)
+		r.ReadI32()
 	}
 }
 
 func BenchmarkCompactProtocolReadI32Large(b *testing.B) {
 	buf := &loopingReader{}
-	p := NewCompactProtocol()
-	p.WriteI32(buf, 1234567890)
+	w := NewCompactProtocolWriter(buf)
+	r := NewCompactProtocolReader(buf)
+	w.WriteI32(1234567890)
 	for i := 0; i < b.N; i++ {
-		p.ReadI32(buf)
+		r.ReadI32()
 	}
 }
 
 func BenchmarkCompactProtocolWriteByte(b *testing.B) {
 	buf := nullWriter(0)
-	p := NewCompactProtocol()
+	w := NewCompactProtocolWriter(buf)
 	for i := 0; i < b.N; i++ {
-		p.WriteByte(buf, 1)
+		w.WriteByte(1)
 	}
 }
 
 func BenchmarkCompactProtocolWriteI32(b *testing.B) {
 	buf := nullWriter(0)
-	p := NewCompactProtocol()
+	w := NewCompactProtocolWriter(buf)
 	for i := 0; i < b.N; i++ {
-		p.WriteI32(buf, 1)
+		w.WriteI32(1)
 	}
 }
 
 func BenchmarkCompactProtocolWriteString4(b *testing.B) {
 	buf := nullWriter(0)
-	p := NewCompactProtocol()
+	w := NewCompactProtocolWriter(buf)
 	for i := 0; i < b.N; i++ {
-		p.WriteString(buf, "test")
+		w.WriteString("test")
 	}
 }
 
 func BenchmarkCompactProtocolWriteFullMessage(b *testing.B) {
 	buf := nullWriter(0)
-	p := NewCompactProtocol()
+	w := NewCompactProtocolWriter(buf)
 	for i := 0; i < b.N; i++ {
-		p.WriteMessageBegin(buf, "", 2, 123)
-		p.WriteStructBegin(buf, "")
-		p.WriteFieldBegin(buf, "", TypeBool, 1)
-		p.WriteBool(buf, true)
-		p.WriteFieldEnd(buf)
-		p.WriteFieldBegin(buf, "", TypeBool, 3)
-		p.WriteBool(buf, false)
-		p.WriteFieldEnd(buf)
-		p.WriteFieldBegin(buf, "", TypeString, 2)
-		p.WriteString(buf, "foo")
-		p.WriteFieldEnd(buf)
-		p.WriteFieldStop(buf)
-		p.WriteStructEnd(buf)
-		p.WriteMessageEnd(buf)
+		w.WriteMessageBegin("", 2, 123)
+		w.WriteStructBegin("")
+		w.WriteFieldBegin("", TypeBool, 1)
+		w.WriteBool(true)
+		w.WriteFieldEnd()
+		w.WriteFieldBegin("", TypeBool, 3)
+		w.WriteBool(false)
+		w.WriteFieldEnd()
+		w.WriteFieldBegin("", TypeString, 2)
+		w.WriteString("foo")
+		w.WriteFieldEnd()
+		w.WriteFieldStop()
+		w.WriteStructEnd()
+		w.WriteMessageEnd()
 	}
 }

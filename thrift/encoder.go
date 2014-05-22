@@ -5,25 +5,23 @@
 package thrift
 
 import (
-	"io"
 	"reflect"
 	"runtime"
 )
 
 // Encoder is the interface that allows types to serialize themselves to a Thrift stream
 type Encoder interface {
-	EncodeThrift(io.Writer, Protocol) error
+	EncodeThrift(ProtocolWriter) error
 }
 
 type encoder struct {
-	w io.Writer
-	p Protocol
+	w ProtocolWriter
 }
 
 // EncodeStruct tries to serialize a struct to a Thrift stream
-func EncodeStruct(w io.Writer, protocol Protocol, v interface{}) (err error) {
+func EncodeStruct(w ProtocolWriter, v interface{}) (err error) {
 	if en, ok := v.(Encoder); ok {
-		return en.EncodeThrift(w, protocol)
+		return en.EncodeThrift(w)
 	}
 
 	defer func() {
@@ -34,7 +32,7 @@ func EncodeStruct(w io.Writer, protocol Protocol, v interface{}) (err error) {
 			err = r.(error)
 		}
 	}()
-	e := &encoder{w, protocol}
+	e := &encoder{w}
 	vo := reflect.ValueOf(v)
 	e.writeStruct(vo)
 	return nil
@@ -51,7 +49,7 @@ func (e *encoder) writeStruct(v reflect.Value) {
 	if v.Kind() != reflect.Struct {
 		e.error(&UnsupportedValueError{Value: v, Str: "expected a struct"})
 	}
-	if err := e.p.WriteStructBegin(e.w, v.Type().Name()); err != nil {
+	if err := e.w.WriteStructBegin(v.Type().Name()); err != nil {
 		e.error(err)
 	}
 	for _, ef := range encodeFields(v.Type()).fields {
@@ -70,23 +68,23 @@ func (e *encoder) writeStruct(v reflect.Value) {
 
 		ftype := ef.fieldType
 
-		if err := e.p.WriteFieldBegin(e.w, structField.Name, ftype, int16(ef.id)); err != nil {
+		if err := e.w.WriteFieldBegin(structField.Name, ftype, int16(ef.id)); err != nil {
 			e.error(err)
 		}
 		e.writeValue(fieldValue, ftype)
-		if err := e.p.WriteFieldEnd(e.w); err != nil {
+		if err := e.w.WriteFieldEnd(); err != nil {
 			e.error(err)
 		}
 	}
-	e.p.WriteFieldStop(e.w)
-	if err := e.p.WriteStructEnd(e.w); err != nil {
+	e.w.WriteFieldStop()
+	if err := e.w.WriteStructEnd(); err != nil {
 		e.error(err)
 	}
 }
 
 func (e *encoder) writeValue(v reflect.Value, thriftType byte) {
 	if en, ok := v.Interface().(Encoder); ok {
-		if err := en.EncodeThrift(e.w, e.p); err != nil {
+		if err := en.EncodeThrift(e.w); err != nil {
 			e.error(err)
 		}
 		return
@@ -101,39 +99,39 @@ func (e *encoder) writeValue(v reflect.Value, thriftType byte) {
 	var err error
 	switch thriftType {
 	case TypeBool:
-		err = e.p.WriteBool(e.w, v.Bool())
+		err = e.w.WriteBool(v.Bool())
 	case TypeByte:
 		if kind == reflect.Uint8 {
-			err = e.p.WriteByte(e.w, byte(v.Uint()))
+			err = e.w.WriteByte(byte(v.Uint()))
 		} else {
-			err = e.p.WriteByte(e.w, byte(v.Int()))
+			err = e.w.WriteByte(byte(v.Int()))
 		}
 	case TypeI16:
-		err = e.p.WriteI16(e.w, int16(v.Int()))
+		err = e.w.WriteI16(int16(v.Int()))
 	case TypeI32:
 		if kind == reflect.Uint32 {
-			err = e.p.WriteI32(e.w, int32(v.Uint()))
+			err = e.w.WriteI32(int32(v.Uint()))
 		} else {
-			err = e.p.WriteI32(e.w, int32(v.Int()))
+			err = e.w.WriteI32(int32(v.Int()))
 		}
 	case TypeI64:
 		if kind == reflect.Uint64 {
-			err = e.p.WriteI64(e.w, int64(v.Uint()))
+			err = e.w.WriteI64(int64(v.Uint()))
 		} else {
-			err = e.p.WriteI64(e.w, v.Int())
+			err = e.w.WriteI64(v.Int())
 		}
 	case TypeDouble:
-		err = e.p.WriteDouble(e.w, v.Float())
+		err = e.w.WriteDouble(v.Float())
 	case TypeString:
 		if kind == reflect.Slice {
 			elemType := v.Type().Elem()
 			if elemType.Kind() == reflect.Uint8 {
-				err = e.p.WriteBytes(e.w, v.Bytes())
+				err = e.w.WriteBytes(v.Bytes())
 			} else {
 				err = &UnsupportedValueError{Value: v, Str: "encoder expected a byte array"}
 			}
 		} else {
-			err = e.p.WriteString(e.w, v.String())
+			err = e.w.WriteString(v.String())
 		}
 	case TypeStruct:
 		e.writeStruct(v)
@@ -142,41 +140,41 @@ func (e *encoder) writeValue(v reflect.Value, thriftType byte) {
 		valueType := v.Type().Elem()
 		keyThriftType := fieldType(keyType)
 		valueThriftType := fieldType(valueType)
-		if er := e.p.WriteMapBegin(e.w, keyThriftType, valueThriftType, v.Len()); er != nil {
+		if er := e.w.WriteMapBegin(keyThriftType, valueThriftType, v.Len()); er != nil {
 			e.error(er)
 		}
 		for _, k := range v.MapKeys() {
 			e.writeValue(k, keyThriftType)
 			e.writeValue(v.MapIndex(k), valueThriftType)
 		}
-		err = e.p.WriteMapEnd(e.w)
+		err = e.w.WriteMapEnd()
 	case TypeList:
 		elemType := v.Type().Elem()
 		if elemType.Kind() == reflect.Uint8 {
-			err = e.p.WriteBytes(e.w, v.Bytes())
+			err = e.w.WriteBytes(v.Bytes())
 		} else {
 			elemThriftType := fieldType(elemType)
-			if er := e.p.WriteListBegin(e.w, elemThriftType, v.Len()); er != nil {
+			if er := e.w.WriteListBegin(elemThriftType, v.Len()); er != nil {
 				e.error(er)
 			}
 			n := v.Len()
 			for i := 0; i < n; i++ {
 				e.writeValue(v.Index(i), elemThriftType)
 			}
-			err = e.p.WriteListEnd(e.w)
+			err = e.w.WriteListEnd()
 		}
 	case TypeSet:
 		if v.Type().Kind() == reflect.Slice {
 			elemType := v.Type().Elem()
 			elemThriftType := fieldType(elemType)
-			if er := e.p.WriteSetBegin(e.w, elemThriftType, v.Len()); er != nil {
+			if er := e.w.WriteSetBegin(elemThriftType, v.Len()); er != nil {
 				e.error(er)
 			}
 			n := v.Len()
 			for i := 0; i < n; i++ {
 				e.writeValue(v.Index(i), elemThriftType)
 			}
-			err = e.p.WriteSetEnd(e.w)
+			err = e.w.WriteSetEnd()
 		} else if v.Type().Kind() == reflect.Map {
 			elemType := v.Type().Key()
 			valueType := v.Type().Elem()
@@ -188,7 +186,7 @@ func (e *encoder) writeValue(v reflect.Value, thriftType byte) {
 						n++
 					}
 				}
-				if er := e.p.WriteSetBegin(e.w, elemThriftType, n); er != nil {
+				if er := e.w.WriteSetBegin(elemThriftType, n); er != nil {
 					e.error(er)
 				}
 				for _, k := range v.MapKeys() {
@@ -197,14 +195,14 @@ func (e *encoder) writeValue(v reflect.Value, thriftType byte) {
 					}
 				}
 			} else {
-				if er := e.p.WriteSetBegin(e.w, elemThriftType, v.Len()); er != nil {
+				if er := e.w.WriteSetBegin(elemThriftType, v.Len()); er != nil {
 					e.error(er)
 				}
 				for _, k := range v.MapKeys() {
 					e.writeValue(k, elemThriftType)
 				}
 			}
-			err = e.p.WriteSetEnd(e.w)
+			err = e.w.WriteSetEnd()
 		} else {
 			e.error(&UnsupportedTypeError{v.Type()})
 		}

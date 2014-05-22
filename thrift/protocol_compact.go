@@ -67,104 +67,84 @@ func init() {
 	compactTypeToThriftType[ctMap] = TypeMap
 }
 
-type compactProtocol struct {
+type compactProtocolWriter struct {
+	w           io.Writer
 	lastFieldID int16
 	boolFid     int16
 	boolValue   bool
 	structs     []int16
 	container   []int
-	readBuf     []byte
-	writeBuf    []byte
+	buf         []byte
 }
 
-func NewCompactProtocol() Protocol {
-	return &compactProtocol{
+type compactProtocolReader struct {
+	r           io.Reader
+	lastFieldID int16
+	boolFid     int16
+	boolValue   bool
+	structs     []int16
+	container   []int
+	buf         []byte
+}
+
+var CompactProtocol = NewProtocolBuilder(NewCompactProtocolReader, NewCompactProtocolWriter)
+
+func NewCompactProtocolWriter(w io.Writer) ProtocolWriter {
+	return &compactProtocolWriter{
+		w:           w,
 		lastFieldID: 0,
 		boolFid:     -1,
 		boolValue:   false,
 		structs:     make([]int16, 0, 8),
 		container:   make([]int, 0, 8),
-		readBuf:     make([]byte, 64),
-		writeBuf:    make([]byte, 64),
+		buf:         make([]byte, 64),
 	}
 }
 
-func (p *compactProtocol) writeVarint(w io.Writer, value int64) (err error) {
-	n := binary.PutVarint(p.writeBuf, value)
-	_, err = w.Write(p.writeBuf[:n])
+func NewCompactProtocolReader(r io.Reader) ProtocolReader {
+	return &compactProtocolReader{
+		r:           r,
+		lastFieldID: 0,
+		boolFid:     -1,
+		boolValue:   false,
+		structs:     make([]int16, 0, 8),
+		container:   make([]int, 0, 8),
+		buf:         make([]byte, 64),
+	}
+}
+
+func (p *compactProtocolWriter) writeVarint(value int64) (err error) {
+	n := binary.PutVarint(p.buf, value)
+	_, err = p.w.Write(p.buf[:n])
 	return
 }
 
-func (p *compactProtocol) writeUvarint(w io.Writer, value uint64) (err error) {
-	n := binary.PutUvarint(p.writeBuf, value)
-	_, err = w.Write(p.writeBuf[:n])
+func (p *compactProtocolWriter) writeUvarint(value uint64) (err error) {
+	n := binary.PutUvarint(p.buf, value)
+	_, err = p.w.Write(p.buf[:n])
 	return
-}
-
-func (p *compactProtocol) readVarint(r io.Reader) (int64, error) {
-	if br, ok := r.(io.ByteReader); ok {
-		return binary.ReadVarint(br)
-	}
-	// TODO: Make this more efficient
-	n := 0
-	b := p.readBuf
-	for {
-		if _, err := r.Read(b[n : n+1]); err != nil {
-			return 0, err
-		}
-		n++
-		// n == 0: buf too small
-		// n  < 0: value larger than 64-bits
-		if val, n := binary.Varint(b[:n]); n > 0 {
-			return val, nil
-		} else if n < 0 {
-			return val, ProtocolError{"CompactProtocol", "varint overflow on read"}
-		}
-	}
-}
-
-func (p *compactProtocol) readUvarint(r io.Reader) (uint64, error) {
-	if br, ok := r.(io.ByteReader); ok {
-		return binary.ReadUvarint(br)
-	}
-	// TODO: Make this more efficient
-	n := 0
-	b := p.readBuf
-	for {
-		if _, err := r.Read(b[n : n+1]); err != nil {
-			return 0, err
-		}
-		n++
-		// n == 0: buf too small
-		// n  < 0: value larger than 64-bits
-		if val, n := binary.Uvarint(b[:n]); n > 0 {
-			return val, nil
-		} else if n < 0 {
-			return val, ProtocolError{"CompactProtocol", "varint overflow on read"}
-		}
-	}
 }
 
 // Write a message header to the wire. Compact Protocol messages contain the
 // protocol version so we can migrate forwards in the future if need be.
-func (p *compactProtocol) WriteMessageBegin(w io.Writer, name string, messageType byte, seqid int32) (err error) {
-	if err = p.writeByteDirect(w, compactProtocolID); err != nil {
+func (p *compactProtocolWriter) WriteMessageBegin(name string, messageType byte, seqid int32) (err error) {
+	if err = p.writeByteDirect(compactProtocolID); err != nil {
 		return
 	}
-	if err = p.writeByteDirect(w, compactVersion|(messageType<<compactTypeShiftAmount)); err != nil {
+	if err = p.writeByteDirect(compactVersion | (messageType << compactTypeShiftAmount)); err != nil {
 		return
 	}
-	if err = p.writeUvarint(w, uint64(seqid)); err != nil {
+	if err = p.writeUvarint(uint64(seqid)); err != nil {
 		return
 	}
-	err = p.WriteString(w, name)
+	err = p.WriteString(name)
 	return
 }
 
 // Write a struct begin. This doesn't actually put anything on the wire. We
 // use it as an opportunity to put special placeholder markers on the field
 // stack so we can get the field id deltas correct.
-func (p *compactProtocol) WriteStructBegin(w io.Writer, name string) error {
+func (p *compactProtocolWriter) WriteStructBegin(name string) error {
 	p.structs = append(p.structs, p.lastFieldID)
 	p.lastFieldID = 0
 	return nil
@@ -173,7 +153,7 @@ func (p *compactProtocol) WriteStructBegin(w io.Writer, name string) error {
 // Write a struct end. This doesn't actually put anything on the wire. We use
 // this as an opportunity to pop the last field from the current struct off
 // of the field stack.
-func (p *compactProtocol) WriteStructEnd(w io.Writer) error {
+func (p *compactProtocolWriter) WriteStructEnd() error {
 	if len(p.structs) == 0 {
 		return ProtocolError{"CompactProtocol", "Struct end without matching begin"}
 	}
@@ -187,19 +167,19 @@ func (p *compactProtocol) WriteStructEnd(w io.Writer) error {
 // difference between the current field id and the last one is small (< 15),
 // then the field id will be encoded in the 4 MSB as a delta. Otherwise, the
 // field id will follow the type header as a zigzag varint.
-func (p *compactProtocol) WriteFieldBegin(w io.Writer, name string, fieldType byte, id int16) error {
+func (p *compactProtocolWriter) WriteFieldBegin(name string, fieldType byte, id int16) error {
 	if fieldType == TypeBool {
 		// we want to possibly include the value, so we'll wait.
 		p.boolFid = id
 		return nil
 	}
-	return p.writeFieldBeginInternal(w, name, fieldType, id, 0xff)
+	return p.writeFieldBeginInternal(name, fieldType, id, 0xff)
 }
 
 // The workhorse of writeFieldBegin. It has the option of doing a
 // 'type override' of the type header. This is used specifically in the
 // boolean field case.
-func (p *compactProtocol) writeFieldBeginInternal(w io.Writer, name string, fieldType byte, id int16, typeOverride byte) error {
+func (p *compactProtocolWriter) writeFieldBeginInternal(name string, fieldType byte, id int16, typeOverride byte) error {
 	// if there's a type override, use that.
 	typeToWrite := typeOverride
 	if typeToWrite == 0xff {
@@ -209,15 +189,15 @@ func (p *compactProtocol) writeFieldBeginInternal(w io.Writer, name string, fiel
 	// check if we can use delta encoding for the field id
 	if id > p.lastFieldID && id-p.lastFieldID <= 15 {
 		// write them together
-		if err := p.writeByteDirect(w, byte((id-p.lastFieldID)<<4|int16(typeToWrite))); err != nil {
+		if err := p.writeByteDirect(byte((id-p.lastFieldID)<<4 | int16(typeToWrite))); err != nil {
 			return err
 		}
 	} else {
 		// write them separate
-		if err := p.writeByteDirect(w, byte(typeToWrite)); err != nil {
+		if err := p.writeByteDirect(byte(typeToWrite)); err != nil {
 			return err
 		}
-		if err := p.WriteI16(w, id); err != nil {
+		if err := p.WriteI16(id); err != nil {
 			return err
 		}
 	}
@@ -227,134 +207,178 @@ func (p *compactProtocol) writeFieldBeginInternal(w io.Writer, name string, fiel
 }
 
 // Write the STOP symbol so we know there are no more fields in this struct.
-func (p *compactProtocol) WriteFieldStop(w io.Writer) error {
-	return p.writeByteDirect(w, TypeStop)
+func (p *compactProtocolWriter) WriteFieldStop() error {
+	return p.writeByteDirect(TypeStop)
 }
 
 // Write a map header. If the map is empty, omit the key and value type
 // headers, as we don't need any additional information to skip it.
-func (p *compactProtocol) WriteMapBegin(w io.Writer, keyType byte, valueType byte, size int) error {
+func (p *compactProtocolWriter) WriteMapBegin(keyType byte, valueType byte, size int) error {
 	if size == 0 {
-		return p.writeByteDirect(w, 0)
+		return p.writeByteDirect(0)
 	}
-	if err := p.writeUvarint(w, uint64(size)); err != nil {
+	if err := p.writeUvarint(uint64(size)); err != nil {
 		return err
 	}
-	return p.writeByteDirect(w, byte(thriftTypeToCompactType[keyType]<<4|thriftTypeToCompactType[valueType]))
+	return p.writeByteDirect(byte(thriftTypeToCompactType[keyType]<<4 | thriftTypeToCompactType[valueType]))
 }
 
 // Write a list header.
-func (p *compactProtocol) WriteListBegin(w io.Writer, elementType byte, size int) error {
-	return p.writeCollectionBegin(w, elementType, size)
+func (p *compactProtocolWriter) WriteListBegin(elementType byte, size int) error {
+	return p.writeCollectionBegin(elementType, size)
 }
 
 // Write a set header.
-func (p *compactProtocol) WriteSetBegin(w io.Writer, elementType byte, size int) error {
-	return p.writeCollectionBegin(w, elementType, size)
+func (p *compactProtocolWriter) WriteSetBegin(elementType byte, size int) error {
+	return p.writeCollectionBegin(elementType, size)
 }
 
 // Write a boolean value. Potentially, this could be a boolean field, in
 // which case the field header info isn't written yet. If so, decide what the
 // right type header is for the value and then write the field header.
 // Otherwise, write a single byte.
-func (p *compactProtocol) WriteBool(w io.Writer, value bool) error {
+func (p *compactProtocolWriter) WriteBool(value bool) error {
 	fieldType := byte(ctFalse)
 	if value {
 		fieldType = ctTrue
 	}
 	if p.boolFid >= 0 {
 		// we haven't written the field header yet
-		return p.writeFieldBeginInternal(w, "bool", TypeBool, p.boolFid, fieldType)
+		return p.writeFieldBeginInternal("bool", TypeBool, p.boolFid, fieldType)
 	}
-	return p.writeByteDirect(w, fieldType)
+	return p.writeByteDirect(fieldType)
 }
 
-func (p *compactProtocol) WriteByte(w io.Writer, value byte) error {
-	return p.writeByteDirect(w, value)
+func (p *compactProtocolWriter) WriteByte(value byte) error {
+	return p.writeByteDirect(value)
 }
 
-func (p *compactProtocol) WriteI16(w io.Writer, value int16) error {
-	return p.writeVarint(w, int64(value))
+func (p *compactProtocolWriter) WriteI16(value int16) error {
+	return p.writeVarint(int64(value))
 }
 
-func (p *compactProtocol) WriteI32(w io.Writer, value int32) error {
-	return p.writeVarint(w, int64(value))
+func (p *compactProtocolWriter) WriteI32(value int32) error {
+	return p.writeVarint(int64(value))
 }
 
-func (p *compactProtocol) WriteI64(w io.Writer, value int64) error {
-	return p.writeVarint(w, value)
+func (p *compactProtocolWriter) WriteI64(value int64) error {
+	return p.writeVarint(value)
 }
 
-func (p *compactProtocol) WriteDouble(w io.Writer, value float64) (err error) {
-	b := p.writeBuf
+func (p *compactProtocolWriter) WriteDouble(value float64) (err error) {
+	b := p.buf
 	binary.BigEndian.PutUint64(b, math.Float64bits(value))
-	_, err = w.Write(b[:8])
+	_, err = p.w.Write(b[:8])
 	return
 }
 
 // Write a string to the wire with a varint size preceeding.
-func (p *compactProtocol) WriteString(w io.Writer, value string) error {
-	return p.WriteBytes(w, []byte(value))
+func (p *compactProtocolWriter) WriteString(value string) error {
+	return p.WriteBytes([]byte(value))
 }
 
 // Write a byte array, using a varint for the size.
-func (p *compactProtocol) WriteBytes(w io.Writer, value []byte) error {
-	if err := p.writeUvarint(w, uint64(len(value))); err != nil {
+func (p *compactProtocolWriter) WriteBytes(value []byte) error {
+	if err := p.writeUvarint(uint64(len(value))); err != nil {
 		return err
 	}
-	_, err := w.Write(value)
+	_, err := p.w.Write(value)
 	return err
 }
 
-func (p *compactProtocol) WriteMessageEnd(w io.Writer) error {
+func (p *compactProtocolWriter) WriteMessageEnd() error {
 	return nil
 }
 
-func (p *compactProtocol) WriteMapEnd(w io.Writer) error {
+func (p *compactProtocolWriter) WriteMapEnd() error {
 	return nil
 }
 
-func (p *compactProtocol) WriteListEnd(w io.Writer) error {
+func (p *compactProtocolWriter) WriteListEnd() error {
 	return nil
 }
 
-func (p *compactProtocol) WriteSetEnd(w io.Writer) error {
+func (p *compactProtocolWriter) WriteSetEnd() error {
 	return nil
 }
 
-func (p *compactProtocol) WriteFieldEnd(w io.Writer) error {
+func (p *compactProtocolWriter) WriteFieldEnd() error {
 	return nil
 }
 
 // Abstract method for writing the start of lists and sets. List and sets on
 // the wire differ only by the type indicator.
-func (p *compactProtocol) writeCollectionBegin(w io.Writer, elemType byte, size int) error {
+func (p *compactProtocolWriter) writeCollectionBegin(elemType byte, size int) error {
 	if size <= 14 {
-		return p.writeByteDirect(w, byte(size)<<4|thriftTypeToCompactType[elemType])
+		return p.writeByteDirect(byte(size)<<4 | thriftTypeToCompactType[elemType])
 	}
-	if err := p.writeByteDirect(w, 0xf0|thriftTypeToCompactType[elemType]); err != nil {
+	if err := p.writeByteDirect(0xf0 | thriftTypeToCompactType[elemType]); err != nil {
 		return err
 	}
-	return p.writeUvarint(w, uint64(size))
+	return p.writeUvarint(uint64(size))
 }
 
 // Writes a byte without any possiblity of all that field header nonsense.
 // Used internally by other writing methods that know they need to write a byte.
-func (p *compactProtocol) writeByteDirect(w io.Writer, value byte) error {
-	p.writeBuf[0] = value
-	_, err := w.Write(p.writeBuf[:1])
+func (p *compactProtocolWriter) writeByteDirect(value byte) error {
+	p.buf[0] = value
+	_, err := p.w.Write(p.buf[:1])
 	return err
 }
 
-func (p *compactProtocol) ReadMessageBegin(r io.Reader) (string, byte, int32, error) {
-	protocolID, err := p.ReadByte(r)
+func (p *compactProtocolReader) readVarint() (int64, error) {
+	if br, ok := p.r.(io.ByteReader); ok {
+		return binary.ReadVarint(br)
+	}
+	// TODO: Make this more efficient
+	n := 0
+	b := p.buf
+	for {
+		if _, err := p.r.Read(b[n : n+1]); err != nil {
+			return 0, err
+		}
+		n++
+		// n == 0: buf too small
+		// n  < 0: value larger than 64-bits
+		if val, n := binary.Varint(b[:n]); n > 0 {
+			return val, nil
+		} else if n < 0 {
+			return val, ProtocolError{"CompactProtocol", "varint overflow on read"}
+		}
+	}
+}
+
+func (p *compactProtocolReader) readUvarint() (uint64, error) {
+	if br, ok := p.r.(io.ByteReader); ok {
+		return binary.ReadUvarint(br)
+	}
+	// TODO: Make this more efficient
+	n := 0
+	b := p.buf
+	for {
+		if _, err := p.r.Read(b[n : n+1]); err != nil {
+			return 0, err
+		}
+		n++
+		// n == 0: buf too small
+		// n  < 0: value larger than 64-bits
+		if val, n := binary.Uvarint(b[:n]); n > 0 {
+			return val, nil
+		} else if n < 0 {
+			return val, ProtocolError{"CompactProtocol", "varint overflow on read"}
+		}
+	}
+}
+
+func (p *compactProtocolReader) ReadMessageBegin() (string, byte, int32, error) {
+	protocolID, err := p.ReadByte()
 	if err != nil {
 		return "", 0, -1, err
 	}
 	if protocolID != compactProtocolID {
 		return "", 0, -1, ProtocolError{"CompactProtocol", "invalid compact protocol ID"}
 	}
-	versionAndType, err := p.ReadByte(r)
+	versionAndType, err := p.ReadByte()
 	if err != nil {
 		return "", 0, -1, err
 	}
@@ -363,11 +387,11 @@ func (p *compactProtocol) ReadMessageBegin(r io.Reader) (string, byte, int32, er
 		return "", 0, -1, ProtocolError{"CompactProtocol", "invalid compact protocol version"}
 	}
 	msgType := (versionAndType >> compactTypeShiftAmount) & 0x03
-	seqID, err := p.readUvarint(r)
+	seqID, err := p.readUvarint()
 	if err != nil {
 		return "", 0, -1, err
 	}
-	msgName, err := p.ReadString(r)
+	msgName, err := p.ReadString()
 	if err != nil {
 		return "", 0, -1, err
 	}
@@ -376,7 +400,7 @@ func (p *compactProtocol) ReadMessageBegin(r io.Reader) (string, byte, int32, er
 
 // Read a struct begin. There's nothing on the wire for this, but it is our
 // opportunity to push a new struct begin marker onto the field stack.
-func (p *compactProtocol) ReadStructBegin(r io.Reader) error {
+func (p *compactProtocolReader) ReadStructBegin() error {
 	p.structs = append(p.structs, p.lastFieldID)
 	p.lastFieldID = 0
 	return nil
@@ -384,7 +408,7 @@ func (p *compactProtocol) ReadStructBegin(r io.Reader) error {
 
 // Doesn't actually consume any wire data, just removes the last field for
 // this struct from the field stack.
-func (p *compactProtocol) ReadStructEnd(r io.Reader) error {
+func (p *compactProtocolReader) ReadStructEnd() error {
 	// consume the last field we read off the wire
 	p.lastFieldID = p.structs[len(p.structs)-1]
 	p.structs = p.structs[:len(p.structs)-1]
@@ -392,8 +416,8 @@ func (p *compactProtocol) ReadStructEnd(r io.Reader) error {
 }
 
 // Read a field header off the wire.
-func (p *compactProtocol) ReadFieldBegin(r io.Reader) (byte, int16, error) {
-	compactType, err := p.ReadByte(r)
+func (p *compactProtocolReader) ReadFieldBegin() (byte, int16, error) {
+	compactType, err := p.ReadByte()
 	if err != nil {
 		return 0, -1, err
 	}
@@ -408,7 +432,7 @@ func (p *compactProtocol) ReadFieldBegin(r io.Reader) (byte, int16, error) {
 	modifier := int16((compactType & 0xf0) >> 4)
 	if modifier == 0 {
 		// not a delta. look ahead for the zigzag varint field id.
-		fieldID, err = p.ReadI16(r)
+		fieldID, err = p.ReadI16()
 		if err != nil {
 			return 0, fieldID, err
 		}
@@ -434,14 +458,14 @@ func (p *compactProtocol) ReadFieldBegin(r io.Reader) (byte, int16, error) {
 // Read a map header off the wire. If the size is zero, skip reading the key
 // and value type. This means that 0-length maps will yield TMaps without the
 // "correct" types.
-func (p *compactProtocol) ReadMapBegin(r io.Reader) (byte, byte, int, error) {
-	size, err := p.readUvarint(r)
+func (p *compactProtocolReader) ReadMapBegin() (byte, byte, int, error) {
+	size, err := p.readUvarint()
 	if err != nil {
 		return 0, 0, -1, err
 	}
 	keyAndValueType := byte(0)
 	if size > 0 {
-		keyAndValueType, err = p.ReadByte(r)
+		keyAndValueType, err = p.ReadByte()
 		if err != nil {
 			return 0, 0, -1, err
 		}
@@ -453,14 +477,14 @@ func (p *compactProtocol) ReadMapBegin(r io.Reader) (byte, byte, int, error) {
 // be packed into the element type header. If it's a longer list, the 4 MSB
 // of the element type header will be 0xF, and a varint will follow with the
 // true size.
-func (p *compactProtocol) ReadListBegin(r io.Reader) (byte, int, error) {
-	sizeAndType, err := p.ReadByte(r)
+func (p *compactProtocolReader) ReadListBegin() (byte, int, error) {
+	sizeAndType, err := p.ReadByte()
 	if err != nil {
 		return 0, -1, err
 	}
 	size := int((sizeAndType >> 4) & 0x0f)
 	if size == 15 {
-		s, err := p.readUvarint(r)
+		s, err := p.readUvarint()
 		if err != nil {
 			return 0, -1, err
 		}
@@ -473,16 +497,16 @@ func (p *compactProtocol) ReadListBegin(r io.Reader) (byte, int, error) {
 // be packed into the element type header. If it's a longer set, the 4 MSB
 // of the element type header will be 0xF, and a varint will follow with the
 // true size.
-func (p *compactProtocol) ReadSetBegin(r io.Reader) (byte, int, error) {
-	return p.ReadListBegin(r)
+func (p *compactProtocolReader) ReadSetBegin() (byte, int, error) {
+	return p.ReadListBegin()
 }
 
 // Read a boolean off the wire. If this is a boolean field, the value should
 // already have been read during readFieldBegin, so we'll just consume the
 // pre-stored value. Otherwise, read a byte.
-func (p *compactProtocol) ReadBool(r io.Reader) (bool, error) {
+func (p *compactProtocolReader) ReadBool() (bool, error) {
 	if p.boolFid < 0 {
-		v, err := p.ReadByte(r)
+		v, err := p.ReadByte()
 		return v == ctTrue, err
 	}
 
@@ -492,83 +516,83 @@ func (p *compactProtocol) ReadBool(r io.Reader) (bool, error) {
 }
 
 // Read a single byte off the wire. Nothing interesting here.
-func (p *compactProtocol) ReadByte(r io.Reader) (byte, error) {
-	b := p.readBuf
-	_, err := io.ReadFull(r, b[:1])
+func (p *compactProtocolReader) ReadByte() (byte, error) {
+	b := p.buf
+	_, err := io.ReadFull(p.r, b[:1])
 	return b[0], err
 }
 
-func (p *compactProtocol) ReadI16(r io.Reader) (int16, error) {
-	v, err := p.readVarint(r)
+func (p *compactProtocolReader) ReadI16() (int16, error) {
+	v, err := p.readVarint()
 	return int16(v), err
 }
 
-func (p *compactProtocol) ReadI32(r io.Reader) (int32, error) {
-	v, err := p.readVarint(r)
+func (p *compactProtocolReader) ReadI32() (int32, error) {
+	v, err := p.readVarint()
 	return int32(v), err
 }
 
-func (p *compactProtocol) ReadI64(r io.Reader) (int64, error) {
-	v, err := p.readVarint(r)
+func (p *compactProtocolReader) ReadI64() (int64, error) {
+	v, err := p.readVarint()
 	return v, err
 }
 
-func (p *compactProtocol) ReadDouble(r io.Reader) (float64, error) {
-	b := p.readBuf
-	_, err := io.ReadFull(r, b[:8])
+func (p *compactProtocolReader) ReadDouble() (float64, error) {
+	b := p.buf
+	_, err := io.ReadFull(p.r, b[:8])
 	value := math.Float64frombits(binary.BigEndian.Uint64(b))
 	return value, err
 }
 
-func (p *compactProtocol) ReadString(r io.Reader) (string, error) {
-	ln, err := p.readUvarint(r)
+func (p *compactProtocolReader) ReadString() (string, error) {
+	ln, err := p.readUvarint()
 	if err != nil || ln == 0 {
 		return "", err
 	} else if ln < 0 {
 		return "", ProtocolError{"CompactProtocol", "negative length in CompactProtocol.ReadString"}
 	}
-	b := p.readBuf
+	b := p.buf
 	if int(ln) > len(b) {
 		b = make([]byte, ln)
 	} else {
 		b = b[:ln]
 	}
-	if _, err := io.ReadFull(r, b); err != nil {
+	if _, err := io.ReadFull(p.r, b); err != nil {
 		return "", err
 	}
 	return string(b), nil
 }
 
-func (p *compactProtocol) ReadBytes(r io.Reader) ([]byte, error) {
-	ln, err := p.readUvarint(r)
+func (p *compactProtocolReader) ReadBytes() ([]byte, error) {
+	ln, err := p.readUvarint()
 	if err != nil || ln == 0 {
 		return nil, err
 	} else if ln < 0 {
 		return nil, ProtocolError{"CompactProtocol", "negative length in CompactProtocol.ReadBytes"}
 	}
 	b := make([]byte, ln)
-	if _, err := io.ReadFull(r, b); err != nil {
+	if _, err := io.ReadFull(p.r, b); err != nil {
 		return nil, err
 	}
 	return b, nil
 }
 
-func (p *compactProtocol) ReadMessageEnd(r io.Reader) error {
+func (p *compactProtocolReader) ReadMessageEnd() error {
 	return nil
 }
 
-func (p *compactProtocol) ReadFieldEnd(r io.Reader) error {
+func (p *compactProtocolReader) ReadFieldEnd() error {
 	return nil
 }
 
-func (p *compactProtocol) ReadMapEnd(r io.Reader) error {
+func (p *compactProtocolReader) ReadMapEnd() error {
 	return nil
 }
 
-func (p *compactProtocol) ReadListEnd(r io.Reader) error {
+func (p *compactProtocolReader) ReadListEnd() error {
 	return nil
 }
 
-func (p *compactProtocol) ReadSetEnd(r io.Reader) error {
+func (p *compactProtocolReader) ReadSetEnd() error {
 	return nil
 }

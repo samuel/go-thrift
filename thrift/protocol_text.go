@@ -14,215 +14,216 @@ var (
 	ErrUnimplemented = errors.New("thrift: unimplemented")
 )
 
-type textProtocol struct {
+type textProtocolWriter struct {
+	w           io.Writer
 	indentation string
 }
 
-func NewTextProtocol() Protocol {
-	return &textProtocol{}
+func NewTextProtocolWriter(w io.Writer) ProtocolWriter {
+	return &textProtocolWriter{w: w}
 }
 
-func (p *textProtocol) indent() {
+func (p *textProtocolWriter) indent() {
 	p.indentation += "\t"
 }
 
-func (p *textProtocol) unindent() {
+func (p *textProtocolWriter) unindent() {
 	p.indentation = p.indentation[:len(p.indentation)-1]
 }
 
-func (p *textProtocol) WriteMessageBegin(w io.Writer, name string, messageType byte, seqid int32) error {
-	fmt.Fprintf(w, "%sMessageBegin(%s, %d, %.8x)\n", p.indentation, name, messageType, seqid)
+func (p *textProtocolWriter) WriteMessageBegin(name string, messageType byte, seqid int32) error {
+	fmt.Fprintf(p.w, "%sMessageBegin(%s, %d, %.8x)\n", p.indentation, name, messageType, seqid)
 	p.indent()
 	return nil
 }
 
-func (p *textProtocol) WriteMessageEnd(w io.Writer) error {
+func (p *textProtocolWriter) WriteMessageEnd() error {
 	p.unindent()
-	fmt.Fprintf(w, "%sMessageEnd()\n", p.indentation)
+	fmt.Fprintf(p.w, "%sMessageEnd()\n", p.indentation)
 	return nil
 }
 
-func (p *textProtocol) WriteStructBegin(w io.Writer, name string) error {
-	fmt.Fprintf(w, "%sStructBegin(%s)\n", p.indentation, name)
+func (p *textProtocolWriter) WriteStructBegin(name string) error {
+	fmt.Fprintf(p.w, "%sStructBegin(%s)\n", p.indentation, name)
 	p.indent()
 	return nil
 }
 
-func (p *textProtocol) WriteStructEnd(w io.Writer) error {
+func (p *textProtocolWriter) WriteStructEnd() error {
 	p.unindent()
-	fmt.Fprintf(w, "%sStructEnd()\n", p.indentation)
+	fmt.Fprintf(p.w, "%sStructEnd()\n", p.indentation)
 	return nil
 }
 
-func (p *textProtocol) WriteFieldBegin(w io.Writer, name string, fieldType byte, id int16) error {
-	fmt.Fprintf(w, "%sFieldBegin(%s, %d, %d)\n", p.indentation, name, fieldType, id)
+func (p *textProtocolWriter) WriteFieldBegin(name string, fieldType byte, id int16) error {
+	fmt.Fprintf(p.w, "%sFieldBegin(%s, %d, %d)\n", p.indentation, name, fieldType, id)
 	p.indent()
 	return nil
 }
 
-func (p *textProtocol) WriteFieldEnd(w io.Writer) error {
+func (p *textProtocolWriter) WriteFieldEnd() error {
 	p.unindent()
-	fmt.Fprintf(w, "%sFieldEnd()\n", p.indentation)
+	fmt.Fprintf(p.w, "%sFieldEnd()\n", p.indentation)
 	return nil
 }
 
-func (p *textProtocol) WriteFieldStop(w io.Writer) error {
-	fmt.Fprintf(w, "%sFieldStop()\n", p.indentation)
+func (p *textProtocolWriter) WriteFieldStop() error {
+	fmt.Fprintf(p.w, "%sFieldStop()\n", p.indentation)
 	return nil
 }
 
-func (p *textProtocol) WriteMapBegin(w io.Writer, keyType byte, valueType byte, size int) error {
-	fmt.Fprintf(w, "%sMapBegin(%d, %d, %d)\n", p.indentation, keyType, valueType, size)
+func (p *textProtocolWriter) WriteMapBegin(keyType byte, valueType byte, size int) error {
+	fmt.Fprintf(p.w, "%sMapBegin(%d, %d, %d)\n", p.indentation, keyType, valueType, size)
 	p.indent()
 	return nil
 }
 
-func (p *textProtocol) WriteMapEnd(w io.Writer) error {
+func (p *textProtocolWriter) WriteMapEnd() error {
 	p.unindent()
-	fmt.Fprintf(w, "%sMapEnd()\n", p.indentation)
+	fmt.Fprintf(p.w, "%sMapEnd()\n", p.indentation)
 	return nil
 }
 
-func (p *textProtocol) WriteListBegin(w io.Writer, elementType byte, size int) error {
-	fmt.Fprintf(w, "%sListBegin(%d, %d)\n", p.indentation, elementType, size)
+func (p *textProtocolWriter) WriteListBegin(elementType byte, size int) error {
+	fmt.Fprintf(p.w, "%sListBegin(%d, %d)\n", p.indentation, elementType, size)
 	p.indent()
 	return nil
 }
 
-func (p *textProtocol) WriteListEnd(w io.Writer) error {
+func (p *textProtocolWriter) WriteListEnd() error {
 	p.unindent()
-	fmt.Fprintf(w, "%sListEnd()\n", p.indentation)
+	fmt.Fprintf(p.w, "%sListEnd()\n", p.indentation)
 	return nil
 }
 
-func (p *textProtocol) WriteSetBegin(w io.Writer, elementType byte, size int) error {
-	fmt.Fprintf(w, "%sSetBegin(%d, %d)\n", p.indentation, elementType, size)
+func (p *textProtocolWriter) WriteSetBegin(elementType byte, size int) error {
+	fmt.Fprintf(p.w, "%sSetBegin(%d, %d)\n", p.indentation, elementType, size)
 	p.indent()
 	return nil
 }
 
-func (p *textProtocol) WriteSetEnd(w io.Writer) error {
+func (p *textProtocolWriter) WriteSetEnd() error {
 	p.unindent()
-	fmt.Fprintf(w, "%sSetEnd()\n", p.indentation)
+	fmt.Fprintf(p.w, "%sSetEnd()\n", p.indentation)
 	return nil
 }
 
-func (p *textProtocol) WriteBool(w io.Writer, value bool) error {
-	fmt.Fprintf(w, "%sBool(%+v)\n", p.indentation, value)
+func (p *textProtocolWriter) WriteBool(value bool) error {
+	fmt.Fprintf(p.w, "%sBool(%+v)\n", p.indentation, value)
 	return nil
 }
 
-func (p *textProtocol) WriteByte(w io.Writer, value byte) error {
-	fmt.Fprintf(w, "%sByte(%d)\n", p.indentation, value)
+func (p *textProtocolWriter) WriteByte(value byte) error {
+	fmt.Fprintf(p.w, "%sByte(%d)\n", p.indentation, value)
 	return nil
 }
 
-func (p *textProtocol) WriteI16(w io.Writer, value int16) error {
-	fmt.Fprintf(w, "%sI16(%d)\n", p.indentation, value)
+func (p *textProtocolWriter) WriteI16(value int16) error {
+	fmt.Fprintf(p.w, "%sI16(%d)\n", p.indentation, value)
 	return nil
 }
 
-func (p *textProtocol) WriteI32(w io.Writer, value int32) error {
-	fmt.Fprintf(w, "%sI32(%d)\n", p.indentation, value)
+func (p *textProtocolWriter) WriteI32(value int32) error {
+	fmt.Fprintf(p.w, "%sI32(%d)\n", p.indentation, value)
 	return nil
 }
 
-func (p *textProtocol) WriteI64(w io.Writer, value int64) error {
-	fmt.Fprintf(w, "%sI64(%d)\n", p.indentation, value)
+func (p *textProtocolWriter) WriteI64(value int64) error {
+	fmt.Fprintf(p.w, "%sI64(%d)\n", p.indentation, value)
 	return nil
 }
 
-func (p *textProtocol) WriteDouble(w io.Writer, value float64) error {
-	fmt.Fprintf(w, "%sDouble(%f)\n", p.indentation, value)
+func (p *textProtocolWriter) WriteDouble(value float64) error {
+	fmt.Fprintf(p.w, "%sDouble(%f)\n", p.indentation, value)
 	return nil
 }
 
-func (p *textProtocol) WriteString(w io.Writer, value string) error {
-	fmt.Fprintf(w, "%sString(%s)\n", p.indentation, value)
+func (p *textProtocolWriter) WriteString(value string) error {
+	fmt.Fprintf(p.w, "%sString(%s)\n", p.indentation, value)
 	return nil
 }
 
-func (p *textProtocol) WriteBytes(w io.Writer, value []byte) error {
-	fmt.Fprintf(w, "%sBytes(%+v)\n", p.indentation, value)
+func (p *textProtocolWriter) WriteBytes(value []byte) error {
+	fmt.Fprintf(p.w, "%sBytes(%+v)\n", p.indentation, value)
 	return nil
 }
 
-func (p *textProtocol) ReadMessageBegin(r io.Reader) (name string, messageType byte, seqid int32, err error) {
+func (p *textProtocolWriter) ReadMessageBegin() (name string, messageType byte, seqid int32, err error) {
 	return "", 0, 0, ErrUnimplemented
 }
 
-func (p *textProtocol) ReadMessageEnd(r io.Reader) error {
+func (p *textProtocolWriter) ReadMessageEnd() error {
 	return ErrUnimplemented
 }
 
-func (p *textProtocol) ReadStructBegin(r io.Reader) error {
+func (p *textProtocolWriter) ReadStructBegin() error {
 	return ErrUnimplemented
 }
 
-func (p *textProtocol) ReadStructEnd(r io.Reader) error {
+func (p *textProtocolWriter) ReadStructEnd() error {
 	return ErrUnimplemented
 }
 
-func (p *textProtocol) ReadFieldBegin(r io.Reader) (fieldType byte, id int16, err error) {
+func (p *textProtocolWriter) ReadFieldBegin() (fieldType byte, id int16, err error) {
 	return 0, 0, ErrUnimplemented
 }
 
-func (p *textProtocol) ReadFieldEnd(r io.Reader) error {
+func (p *textProtocolWriter) ReadFieldEnd() error {
 	return ErrUnimplemented
 }
 
-func (p *textProtocol) ReadMapBegin(r io.Reader) (keyType byte, valueType byte, size int, err error) {
+func (p *textProtocolWriter) ReadMapBegin() (keyType byte, valueType byte, size int, err error) {
 	return 0, 0, 0, ErrUnimplemented
 }
 
-func (p *textProtocol) ReadMapEnd(r io.Reader) error {
+func (p *textProtocolWriter) ReadMapEnd() error {
 	return ErrUnimplemented
 }
 
-func (p *textProtocol) ReadListBegin(r io.Reader) (elementType byte, size int, err error) {
+func (p *textProtocolWriter) ReadListBegin() (elementType byte, size int, err error) {
 	return 0, 0, ErrUnimplemented
 }
 
-func (p *textProtocol) ReadListEnd(r io.Reader) error {
+func (p *textProtocolWriter) ReadListEnd() error {
 	return ErrUnimplemented
 }
 
-func (p *textProtocol) ReadSetBegin(r io.Reader) (elementType byte, size int, err error) {
+func (p *textProtocolWriter) ReadSetBegin() (elementType byte, size int, err error) {
 	return 0, 0, ErrUnimplemented
 }
 
-func (p *textProtocol) ReadSetEnd(r io.Reader) error {
+func (p *textProtocolWriter) ReadSetEnd() error {
 	return ErrUnimplemented
 }
 
-func (p *textProtocol) ReadBool(r io.Reader) (bool, error) {
+func (p *textProtocolWriter) ReadBool() (bool, error) {
 	return false, ErrUnimplemented
 }
 
-func (p *textProtocol) ReadByte(r io.Reader) (byte, error) {
+func (p *textProtocolWriter) ReadByte() (byte, error) {
 	return 0, ErrUnimplemented
 }
 
-func (p *textProtocol) ReadI16(r io.Reader) (int16, error) {
+func (p *textProtocolWriter) ReadI16() (int16, error) {
 	return 0, ErrUnimplemented
 }
 
-func (p *textProtocol) ReadI32(r io.Reader) (int32, error) {
+func (p *textProtocolWriter) ReadI32() (int32, error) {
 	return 0, ErrUnimplemented
 }
 
-func (p *textProtocol) ReadI64(r io.Reader) (int64, error) {
+func (p *textProtocolWriter) ReadI64() (int64, error) {
 	return 0, ErrUnimplemented
 }
 
-func (p *textProtocol) ReadDouble(r io.Reader) (float64, error) {
+func (p *textProtocolWriter) ReadDouble() (float64, error) {
 	return 0.0, ErrUnimplemented
 }
 
-func (p *textProtocol) ReadString(r io.Reader) (string, error) {
+func (p *textProtocolWriter) ReadString() (string, error) {
 	return "", ErrUnimplemented
 }
 
-func (p *textProtocol) ReadBytes(r io.Reader) ([]byte, error) {
+func (p *textProtocolWriter) ReadBytes() ([]byte, error) {
 	return nil, ErrUnimplemented
 }

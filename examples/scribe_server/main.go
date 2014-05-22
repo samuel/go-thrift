@@ -35,6 +35,7 @@ func main() {
 			continue
 		}
 		fmt.Printf("New connection %+v\n", conn)
-		go rpc.ServeCodec(thrift.NewServerCodec(thrift.NewFramedReadWriteCloser(conn, 0), thrift.NewBinaryProtocol(true, false)))
+		t := thrift.NewTransport(thrift.NewFramedReadWriteCloser(conn, 0), thrift.BinaryProtocol)
+		go rpc.ServeCodec(thrift.NewServerCodec(t))
 	}
 }

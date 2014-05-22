@@ -7,7 +7,6 @@ package thrift
 import (
 	"errors"
 	"fmt"
-	"io"
 	"log"
 	"net"
 	"net/rpc"
@@ -33,30 +32,30 @@ func (req *TestOneWayRequest) Oneway() bool {
 	return true
 }
 
-func (tr *TestRequest) EncodeThrift(w io.Writer, proto Protocol) error {
-	if err := proto.WriteStructBegin(w, "TestRequest"); err != nil {
+func (tr *TestRequest) EncodeThrift(w ProtocolWriter) error {
+	if err := w.WriteStructBegin("TestRequest"); err != nil {
 		return err
 	}
-	if err := proto.WriteFieldBegin(w, "Value", TypeI32, 1); err != nil {
+	if err := w.WriteFieldBegin("Value", TypeI32, 1); err != nil {
 		return err
 	}
-	if err := proto.WriteI32(w, tr.Value); err != nil {
+	if err := w.WriteI32(tr.Value); err != nil {
 		return err
 	}
-	if err := proto.WriteFieldEnd(w); err != nil {
+	if err := w.WriteFieldEnd(); err != nil {
 		return err
 	}
-	if err := proto.WriteFieldStop(w); err != nil {
+	if err := w.WriteFieldStop(); err != nil {
 		return err
 	}
-	return proto.WriteStructEnd(w)
+	return w.WriteStructEnd()
 }
 
-func (tr *TestRequest) DecodeThrift(r io.Reader, proto Protocol) error {
-	if err := proto.ReadStructBegin(r); err != nil {
+func (tr *TestRequest) DecodeThrift(r ProtocolReader) error {
+	if err := r.ReadStructBegin(); err != nil {
 		return err
 	}
-	ftype, id, err := proto.ReadFieldBegin(r)
+	ftype, id, err := r.ReadFieldBegin()
 	if err != nil {
 		return err
 	}
@@ -66,48 +65,48 @@ func (tr *TestRequest) DecodeThrift(r io.Reader, proto Protocol) error {
 			FieldName:  "Value",
 		}
 	}
-	if tr.Value, err = proto.ReadI32(r); err != nil {
+	if tr.Value, err = r.ReadI32(); err != nil {
 		return err
 	}
-	if err := proto.ReadFieldEnd(r); err != nil {
+	if err := r.ReadFieldEnd(); err != nil {
 		return err
 	}
-	if ftype, _, err := proto.ReadFieldBegin(r); err != nil {
+	if ftype, _, err := r.ReadFieldBegin(); err != nil {
 		return err
 	} else if ftype != TypeStop {
 		return errors.New("expected field stop")
 	}
-	return proto.ReadStructEnd(r)
+	return r.ReadStructEnd()
 }
 
 type TestResponse struct {
 	Value int32 `thrift:"0,required"`
 }
 
-func (tr *TestResponse) EncodeThrift(w io.Writer, proto Protocol) error {
-	if err := proto.WriteStructBegin(w, "TestResponse"); err != nil {
+func (tr *TestResponse) EncodeThrift(w ProtocolWriter) error {
+	if err := w.WriteStructBegin("TestResponse"); err != nil {
 		return err
 	}
-	if err := proto.WriteFieldBegin(w, "Value", TypeI32, 0); err != nil {
+	if err := w.WriteFieldBegin("Value", TypeI32, 0); err != nil {
 		return err
 	}
-	if err := proto.WriteI32(w, tr.Value); err != nil {
+	if err := w.WriteI32(tr.Value); err != nil {
 		return err
 	}
-	if err := proto.WriteFieldEnd(w); err != nil {
+	if err := w.WriteFieldEnd(); err != nil {
 		return err
 	}
-	if err := proto.WriteFieldStop(w); err != nil {
+	if err := w.WriteFieldStop(); err != nil {
 		return err
 	}
-	return proto.WriteStructEnd(w)
+	return w.WriteStructEnd()
 }
 
-func (tr *TestResponse) DecodeThrift(r io.Reader, proto Protocol) error {
-	if err := proto.ReadStructBegin(r); err != nil {
+func (tr *TestResponse) DecodeThrift(r ProtocolReader) error {
+	if err := r.ReadStructBegin(); err != nil {
 		return err
 	}
-	ftype, id, err := proto.ReadFieldBegin(r)
+	ftype, id, err := r.ReadFieldBegin()
 	if err != nil {
 		return err
 	}
@@ -117,18 +116,18 @@ func (tr *TestResponse) DecodeThrift(r io.Reader, proto Protocol) error {
 			FieldName:  "Value",
 		}
 	}
-	if tr.Value, err = proto.ReadI32(r); err != nil {
+	if tr.Value, err = r.ReadI32(); err != nil {
 		return err
 	}
-	if err := proto.ReadFieldEnd(r); err != nil {
+	if err := r.ReadFieldEnd(); err != nil {
 		return err
 	}
-	if ftype, _, err := proto.ReadFieldBegin(r); err != nil {
+	if ftype, _, err := r.ReadFieldBegin(); err != nil {
 		return err
 	} else if ftype != TypeStop {
 		return errors.New("expected field stop")
 	}
-	return proto.ReadStructEnd(r)
+	return r.ReadStructEnd()
 }
 
 type TestService int
@@ -163,7 +162,9 @@ func startServer() {
 			if err != nil {
 				panic(err)
 			}
-			go rpc.ServeCodec(NewServerCodec(NewFramedReadWriteCloser(conn, 0), NewBinaryProtocol(true, false)))
+			c := NewFramedReadWriteCloser(conn, 0)
+			t := NewTransport(c, BinaryProtocol)
+			go rpc.ServeCodec(NewServerCodec(t))
 		}
 	}()
 }
@@ -171,7 +172,7 @@ func startServer() {
 func TestRPCClientSuccess(t *testing.T) {
 	once.Do(startServer)
 
-	c, err := Dial("tcp", serverAddr, true, NewBinaryProtocol(true, false), false)
+	c, err := Dial("tcp", serverAddr, true, BinaryProtocol, false)
 	if err != nil {
 		t.Fatalf("NewClient returned error: %+v", err)
 	}
@@ -188,7 +189,7 @@ func TestRPCClientSuccess(t *testing.T) {
 func TestRPCClientOneWay(t *testing.T) {
 	once.Do(startServer)
 
-	c, err := Dial("tcp", serverAddr, true, NewBinaryProtocol(true, false), true)
+	c, err := Dial("tcp", serverAddr, true, BinaryProtocol, true)
 	if err != nil {
 		t.Fatalf("NewClient returned error: %+v", err)
 	}
@@ -201,7 +202,7 @@ func TestRPCClientOneWay(t *testing.T) {
 func TestRPCClientFail(t *testing.T) {
 	once.Do(startServer)
 
-	c, err := Dial("tcp", serverAddr, true, NewBinaryProtocol(true, false), false)
+	c, err := Dial("tcp", serverAddr, true, BinaryProtocol, false)
 	if err != nil {
 		t.Fatalf("NewClient returned error: %+v", err)
 	}
@@ -226,7 +227,7 @@ func TestRPCClientFail(t *testing.T) {
 func TestRPCMallocCount(t *testing.T) {
 	once.Do(startServer)
 
-	c, err := Dial("tcp", serverAddr, true, NewBinaryProtocol(true, false), false)
+	c, err := Dial("tcp", serverAddr, true, BinaryProtocol, false)
 	if err != nil {
 		t.Fatalf("NewClient returned error: %+v", err)
 	}

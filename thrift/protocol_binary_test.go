@@ -9,58 +9,60 @@ import (
 	"testing"
 )
 
-func testProtocol(t *testing.T, pr Protocol) {
-	b := &bytes.Buffer{}
+func testProtocol(t *testing.T, r ProtocolReader, w ProtocolWriter) {
+	// b := &bytes.Buffer{}
+	// r := pr.NewProtocolReader(b)
+	// w := pr.NewProtocolWriter(b)
 
-	if err := pr.WriteBool(b, true); err != nil {
+	if err := w.WriteBool(true); err != nil {
 		t.Fatalf("write bool true failed: %+v", err)
 	}
-	if b, err := pr.ReadBool(b); err != nil {
+	if b, err := r.ReadBool(); err != nil {
 		t.Fatalf("read bool true failed: %+v", err)
 	} else if !b {
 		t.Fatal("read bool true returned false")
 	}
 
-	if err := pr.WriteBool(b, false); err != nil {
+	if err := w.WriteBool(false); err != nil {
 		t.Fatalf("write bool false failed: %+v", err)
 	}
-	if b, err := pr.ReadBool(b); err != nil {
+	if b, err := r.ReadBool(); err != nil {
 		t.Fatalf("read bool false failed: %+v", err)
 	} else if b {
 		t.Fatal("read bool false returned true")
 	}
 
-	if err := pr.WriteI16(b, 1234); err != nil {
+	if err := w.WriteI16(1234); err != nil {
 		t.Fatalf("write i16 failed: %+v", err)
 	}
-	if v, err := pr.ReadI16(b); err != nil {
+	if v, err := r.ReadI16(); err != nil {
 		t.Fatalf("read i16 failed: %+v", err)
 	} else if v != 1234 {
 		t.Fatalf("read i16 returned %d expected 1234", v)
 	}
 
-	if err := pr.WriteI32(b, -1234); err != nil {
+	if err := w.WriteI32(-1234); err != nil {
 		t.Fatalf("write i32 failed: %+v", err)
 	}
-	if v, err := pr.ReadI32(b); err != nil {
+	if v, err := r.ReadI32(); err != nil {
 		t.Fatalf("read i32 failed: %+v", err)
 	} else if v != -1234 {
 		t.Fatalf("read i32 returned %d expected -1234", v)
 	}
 
-	if err := pr.WriteI64(b, -1234); err != nil {
+	if err := w.WriteI64(-1234); err != nil {
 		t.Fatalf("write i64 failed: %+v", err)
 	}
-	if v, err := pr.ReadI64(b); err != nil {
+	if v, err := r.ReadI64(); err != nil {
 		t.Fatalf("read i64 failed: %+v", err)
 	} else if v != -1234 {
 		t.Fatalf("read i64 returned %d expected -1234", v)
 	}
 
-	if err := pr.WriteDouble(b, -0.1234); err != nil {
+	if err := w.WriteDouble(-0.1234); err != nil {
 		t.Fatalf("write double failed: %+v", err)
 	}
-	if v, err := pr.ReadDouble(b); err != nil {
+	if v, err := r.ReadDouble(); err != nil {
 		t.Fatalf("read double failed: %+v", err)
 	} else if v != -0.1234 {
 		t.Fatalf("read double returned %.4f expected -0.1234", v)
@@ -68,10 +70,10 @@ func testProtocol(t *testing.T, pr Protocol) {
 
 	testString := "012345"
 	for i := 0; i < 2; i++ {
-		if err := pr.WriteString(b, testString); err != nil {
+		if err := w.WriteString(testString); err != nil {
 			t.Fatalf("write string failed: %+v", err)
 		}
-		if v, err := pr.ReadString(b); err != nil {
+		if v, err := r.ReadString(); err != nil {
 			t.Fatalf("read string failed: %+v", err)
 		} else if v != testString {
 			t.Fatalf("read string returned %s expected '%s'", v, testString)
@@ -81,56 +83,56 @@ func testProtocol(t *testing.T, pr Protocol) {
 
 	// Write a message
 
-	if err := pr.WriteMessageBegin(b, "msgName", 2, 123); err != nil {
+	if err := w.WriteMessageBegin("msgName", 2, 123); err != nil {
 		t.Fatalf("WriteMessageBegin failed: %+v", err)
 	}
-	if err := pr.WriteStructBegin(b, "struct"); err != nil {
+	if err := w.WriteStructBegin("struct"); err != nil {
 		t.Fatalf("WriteStructBegin failed: %+v", err)
 	}
 
-	if err := pr.WriteFieldBegin(b, "boolTrue", TypeBool, 1); err != nil {
+	if err := w.WriteFieldBegin("boolTrue", TypeBool, 1); err != nil {
 		t.Fatalf("WriteFieldBegin failed: %+v", err)
 	}
-	if err := pr.WriteBool(b, true); err != nil {
+	if err := w.WriteBool(true); err != nil {
 		t.Fatalf("WriteBool(true) failed: %+v", err)
 	}
-	if err := pr.WriteFieldEnd(b); err != nil {
+	if err := w.WriteFieldEnd(); err != nil {
 		t.Fatalf("WriteFieldEnd failed: %+v", err)
 	}
 
-	if err := pr.WriteFieldBegin(b, "boolFalse", TypeBool, 3); err != nil {
+	if err := w.WriteFieldBegin("boolFalse", TypeBool, 3); err != nil {
 		t.Fatalf("WriteFieldBegin failed: %+v", err)
 	}
-	if err := pr.WriteBool(b, false); err != nil {
+	if err := w.WriteBool(false); err != nil {
 		t.Fatalf("WriteBool(false) failed: %+v", err)
 	}
-	if err := pr.WriteFieldEnd(b); err != nil {
+	if err := w.WriteFieldEnd(); err != nil {
 		t.Fatalf("WriteFieldEnd failed: %+v", err)
 	}
 
-	if err := pr.WriteFieldBegin(b, "str", TypeString, 2); err != nil {
+	if err := w.WriteFieldBegin("str", TypeString, 2); err != nil {
 		t.Fatalf("WriteFieldBegin failed: %+v", err)
 	}
-	if err := pr.WriteString(b, "foo"); err != nil {
+	if err := w.WriteString("foo"); err != nil {
 		t.Fatalf("WriteString failed: %+v", err)
 	}
-	if err := pr.WriteFieldEnd(b); err != nil {
+	if err := w.WriteFieldEnd(); err != nil {
 		t.Fatalf("WriteFieldEnd failed: %+v", err)
 	}
 
-	if err := pr.WriteFieldStop(b); err != nil {
+	if err := w.WriteFieldStop(); err != nil {
 		t.Fatalf("WriteStructEnd failed: %+v", err)
 	}
-	if err := pr.WriteStructEnd(b); err != nil {
+	if err := w.WriteStructEnd(); err != nil {
 		t.Fatalf("WriteStructEnd failed: %+v", err)
 	}
-	if err := pr.WriteMessageEnd(b); err != nil {
+	if err := w.WriteMessageEnd(); err != nil {
 		t.Fatalf("WriteMessageEnd failed: %+v", err)
 	}
 
 	// Read the message
 
-	if name, mtype, seqID, err := pr.ReadMessageBegin(b); err != nil {
+	if name, mtype, seqID, err := r.ReadMessageBegin(); err != nil {
 		t.Fatalf("ReadMessageBegin failed: %+v", err)
 	} else if name != "msgName" {
 		t.Fatalf("ReadMessageBegin name mismatch: %s != %s", name, "msgName")
@@ -139,154 +141,160 @@ func testProtocol(t *testing.T, pr Protocol) {
 	} else if seqID != 123 {
 		t.Fatalf("ReadMessageBegin seqID mismatch: %d != %d", seqID, 123)
 	}
-	if err := pr.ReadStructBegin(b); err != nil {
+	if err := r.ReadStructBegin(); err != nil {
 		t.Fatalf("ReadStructBegin failed: %+v", err)
 	}
 
-	if fieldType, id, err := pr.ReadFieldBegin(b); err != nil {
+	if fieldType, id, err := r.ReadFieldBegin(); err != nil {
 		t.Fatalf("ReadFieldBegin failed: %+v", err)
 	} else if fieldType != TypeBool {
 		t.Fatalf("ReadFieldBegin type mismatch: %d != %d", fieldType, TypeBool)
 	} else if id != 1 {
 		t.Fatalf("ReadFieldBegin id mismatch: %d != %d", id, 1)
 	}
-	if v, err := pr.ReadBool(b); err != nil {
+	if v, err := r.ReadBool(); err != nil {
 		t.Fatalf("ReaBool failed: %+v", err)
 	} else if !v {
 		t.Fatalf("ReadBool value mistmatch %+v != %+v", v, true)
 	}
-	if err := pr.ReadFieldEnd(b); err != nil {
+	if err := r.ReadFieldEnd(); err != nil {
 		t.Fatalf("ReadFieldEnd failed: %+v", err)
 	}
 
-	if fieldType, id, err := pr.ReadFieldBegin(b); err != nil {
+	if fieldType, id, err := r.ReadFieldBegin(); err != nil {
 		t.Fatalf("ReadFieldBegin failed: %+v", err)
 	} else if fieldType != TypeBool {
 		t.Fatalf("ReadFieldBegin type mismatch: %d != %d", fieldType, TypeBool)
 	} else if id != 3 {
 		t.Fatalf("ReadFieldBegin id mismatch: %d != %d", id, 3)
 	}
-	if v, err := pr.ReadBool(b); err != nil {
+	if v, err := r.ReadBool(); err != nil {
 		t.Fatalf("ReaBool failed: %+v", err)
 	} else if v {
 		t.Fatalf("ReadBool value mistmatch %+v != %+v", v, false)
 	}
-	if err := pr.ReadFieldEnd(b); err != nil {
+	if err := r.ReadFieldEnd(); err != nil {
 		t.Fatalf("ReadFieldEnd failed: %+v", err)
 	}
 
-	if fieldType, id, err := pr.ReadFieldBegin(b); err != nil {
+	if fieldType, id, err := r.ReadFieldBegin(); err != nil {
 		t.Fatalf("ReadFieldBegin failed: %+v", err)
 	} else if fieldType != TypeString {
 		t.Fatalf("ReadFieldBegin type mismatch: %d != %d", fieldType, TypeString)
 	} else if id != 2 {
 		t.Fatalf("ReadFieldBegin id mismatch: %d != %d", id, 2)
 	}
-	if v, err := pr.ReadString(b); err != nil {
+	if v, err := r.ReadString(); err != nil {
 		t.Fatalf("ReadString failed: %+v", err)
 	} else if v != "foo" {
 		t.Fatalf("ReadString value mistmatch %s != %s", v, "foo")
 	}
-	if err := pr.ReadFieldEnd(b); err != nil {
+	if err := r.ReadFieldEnd(); err != nil {
 		t.Fatalf("ReadFieldEnd failed: %+v", err)
 	}
 
-	if err := pr.ReadStructEnd(b); err != nil {
+	if err := r.ReadStructEnd(); err != nil {
 		t.Fatalf("ReadStructEnd failed: %+v", err)
 	}
-	if err := pr.ReadMessageEnd(b); err != nil {
+	if err := r.ReadMessageEnd(); err != nil {
 		t.Fatalf("ReadMessageEnd failed: %+v", err)
 	}
 }
 
 func TestBinaryProtocolBadStringLength(t *testing.T) {
 	b := &bytes.Buffer{}
-	pr := NewBinaryProtocol(true, false)
+	w := NewBinaryProtocolWriter(b, true)
+	r := NewBinaryProtocolReader(b, false)
 
 	// zero string length
-	if err := pr.WriteI32(b, 0); err != nil {
+	if err := w.WriteI32(0); err != nil {
 		t.Fatal(err)
 	}
-	if st, err := pr.ReadString(b); err != nil {
+	if st, err := r.ReadString(); err != nil {
 		t.Fatal(err)
 	} else if st != "" {
 		t.Fatal("BinaryProtocol.ReadString didn't return an empty string given a length of 0")
 	}
 
 	// negative string length
-	if err := pr.WriteI32(b, -1); err != nil {
+	if err := w.WriteI32(-1); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := pr.ReadString(b); err == nil {
+	if _, err := r.ReadString(); err == nil {
 		t.Fatal("BinaryProtocol.ReadString didn't return an error given a negative length")
 	}
 }
 
 func TestBinaryProtocol(t *testing.T) {
-	testProtocol(t, NewBinaryProtocol(true, false))
-	testProtocol(t, NewBinaryProtocol(false, false))
-	testProtocol(t, NewBinaryProtocol(true, true))
+	b := &bytes.Buffer{}
+	testProtocol(t, NewBinaryProtocolReader(b, false), NewBinaryProtocolWriter(b, true))
+	b.Reset()
+	testProtocol(t, NewBinaryProtocolReader(b, false), NewBinaryProtocolWriter(b, false))
+	b.Reset()
+	testProtocol(t, NewBinaryProtocolReader(b, true), NewBinaryProtocolWriter(b, true))
 }
 
 func BenchmarkBinaryProtocolReadByte(b *testing.B) {
 	buf := &loopingReader{}
-	p := NewBinaryProtocol(true, false)
-	p.WriteByte(buf, 123)
+	w := NewBinaryProtocolWriter(buf, true)
+	r := NewBinaryProtocolReader(buf, false)
+	w.WriteByte(123)
 	for i := 0; i < b.N; i++ {
-		p.ReadByte(buf)
+		r.ReadByte()
 	}
 }
 
 func BenchmarkBinaryProtocolReadI32(b *testing.B) {
 	buf := &loopingReader{}
-	p := NewBinaryProtocol(true, false)
-	p.WriteI32(buf, 1234567890)
+	w := NewBinaryProtocolWriter(buf, true)
+	r := NewBinaryProtocolReader(buf, false)
+	w.WriteI32(1234567890)
 	for i := 0; i < b.N; i++ {
-		p.ReadI32(buf)
+		r.ReadI32()
 	}
 }
 
 func BenchmarkBinaryProtocolWriteByte(b *testing.B) {
 	buf := nullWriter(0)
-	p := NewBinaryProtocol(true, false)
+	w := NewBinaryProtocolWriter(buf, true)
 	for i := 0; i < b.N; i++ {
-		p.WriteByte(buf, 1)
+		w.WriteByte(1)
 	}
 }
 
 func BenchmarkBinaryProtocolWriteI32(b *testing.B) {
 	buf := nullWriter(0)
-	p := NewBinaryProtocol(true, false)
+	w := NewBinaryProtocolWriter(buf, true)
 	for i := 0; i < b.N; i++ {
-		p.WriteI32(buf, 1)
+		w.WriteI32(1)
 	}
 }
 
 func BenchmarkBinaryProtocolWriteString4(b *testing.B) {
 	buf := nullWriter(0)
-	p := NewBinaryProtocol(true, false)
+	w := NewBinaryProtocolWriter(buf, true)
 	for i := 0; i < b.N; i++ {
-		p.WriteString(buf, "test")
+		w.WriteString("test")
 	}
 }
 
 func BenchmarkBinaryProtocolWriteFullMessage(b *testing.B) {
 	buf := nullWriter(0)
-	p := NewBinaryProtocol(true, false)
+	w := NewBinaryProtocolWriter(buf, true)
 	for i := 0; i < b.N; i++ {
-		p.WriteMessageBegin(buf, "", 2, 123)
-		p.WriteStructBegin(buf, "")
-		p.WriteFieldBegin(buf, "", TypeBool, 1)
-		p.WriteBool(buf, true)
-		p.WriteFieldEnd(buf)
-		p.WriteFieldBegin(buf, "", TypeBool, 3)
-		p.WriteBool(buf, false)
-		p.WriteFieldEnd(buf)
-		p.WriteFieldBegin(buf, "", TypeString, 2)
-		p.WriteString(buf, "foo")
-		p.WriteFieldEnd(buf)
-		p.WriteFieldStop(buf)
-		p.WriteStructEnd(buf)
-		p.WriteMessageEnd(buf)
+		w.WriteMessageBegin("", 2, 123)
+		w.WriteStructBegin("")
+		w.WriteFieldBegin("", TypeBool, 1)
+		w.WriteBool(true)
+		w.WriteFieldEnd()
+		w.WriteFieldBegin("", TypeBool, 3)
+		w.WriteBool(false)
+		w.WriteFieldEnd()
+		w.WriteFieldBegin("", TypeString, 2)
+		w.WriteString("foo")
+		w.WriteFieldEnd()
+		w.WriteFieldStop()
+		w.WriteStructEnd()
+		w.WriteMessageEnd()
 	}
 }

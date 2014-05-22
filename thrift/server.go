@@ -13,8 +13,7 @@ import (
 )
 
 type serverCodec struct {
-	transport  io.ReadWriteCloser
-	protocol   Protocol
+	conn       Transport
 	nameCache  map[string]string // incoming name -> registered name
 	methodName map[uint64]string // sequence ID -> method name
 	mu         sync.Mutex
@@ -23,22 +22,21 @@ type serverCodec struct {
 // ServeConn runs the Thrift RPC server on a single connection. ServeConn blocks,
 // serving the connection until the client hangs up. The caller typically invokes
 // ServeConn in a go statement.
-func ServeConn(conn io.ReadWriteCloser, protocol Protocol) {
-	rpc.ServeCodec(NewServerCodec(conn, protocol))
+func ServeConn(conn Transport) {
+	rpc.ServeCodec(NewServerCodec(conn))
 }
 
 // NewServerCodec returns a new rpc.ServerCodec using Thrift RPC on conn using the specified protocol.
-func NewServerCodec(conn io.ReadWriteCloser, protocol Protocol) rpc.ServerCodec {
+func NewServerCodec(conn Transport) rpc.ServerCodec {
 	return &serverCodec{
-		transport:  conn,
-		protocol:   protocol,
+		conn:       conn,
 		nameCache:  make(map[string]string, 8),
 		methodName: make(map[uint64]string, 8),
 	}
 }
 
 func (c *serverCodec) ReadRequestHeader(request *rpc.Request) error {
-	name, messageType, seq, err := c.protocol.ReadMessageBegin(c.transport)
+	name, messageType, seq, err := c.conn.ReadMessageBegin()
 	if err != nil {
 		return err
 	}
@@ -69,15 +67,15 @@ func (c *serverCodec) ReadRequestHeader(request *rpc.Request) error {
 
 func (c *serverCodec) ReadRequestBody(thriftStruct interface{}) error {
 	if thriftStruct == nil {
-		if err := SkipValue(c.transport, c.protocol, TypeStruct); err != nil {
+		if err := SkipValue(c.conn, TypeStruct); err != nil {
 			return err
 		}
 	} else {
-		if err := DecodeStruct(c.transport, c.protocol, thriftStruct); err != nil {
+		if err := DecodeStruct(c.conn, thriftStruct); err != nil {
 			return err
 		}
 	}
-	return c.protocol.ReadMessageEnd(c.transport)
+	return c.conn.ReadMessageEnd()
 }
 
 func (c *serverCodec) WriteResponse(response *rpc.Response, thriftStruct interface{}) error {
@@ -96,21 +94,21 @@ func (c *serverCodec) WriteResponse(response *rpc.Response, thriftStruct interfa
 		}
 		thriftStruct = &ApplicationException{response.Error, etype}
 	}
-	if err := c.protocol.WriteMessageBegin(c.transport, response.ServiceMethod, mtype, int32(response.Seq)); err != nil {
+	if err := c.conn.WriteMessageBegin(response.ServiceMethod, mtype, int32(response.Seq)); err != nil {
 		return err
 	}
-	if err := EncodeStruct(c.transport, c.protocol, thriftStruct); err != nil {
+	if err := EncodeStruct(c.conn, thriftStruct); err != nil {
 		return err
 	}
-	if err := c.protocol.WriteMessageEnd(c.transport); err != nil {
+	if err := c.conn.WriteMessageEnd(); err != nil {
 		return err
 	}
-	if flusher, ok := c.transport.(Flusher); ok {
-		return flusher.Flush()
-	}
-	return nil
+	return c.conn.Flush()
 }
 
 func (c *serverCodec) Close() error {
-	return c.transport.Close()
+	if cl, ok := c.conn.(io.Closer); ok {
+		return cl.Close()
+	}
+	return nil
 }

@@ -5,25 +5,23 @@
 package thrift
 
 import (
-	"io"
 	"reflect"
 	"runtime"
 )
 
 // Decoder is the interface that allows types to deserialize themselves from a Thrift stream
 type Decoder interface {
-	DecodeThrift(io.Reader, Protocol) error
+	DecodeThrift(ProtocolReader) error
 }
 
 type decoder struct {
-	r io.Reader
-	p Protocol
+	r ProtocolReader
 }
 
 // DecodeStruct tries to deserialize a struct from a Thrift stream
-func DecodeStruct(r io.Reader, protocol Protocol, v interface{}) (err error) {
+func DecodeStruct(r ProtocolReader, v interface{}) (err error) {
 	if de, ok := v.(Decoder); ok {
-		return de.DecodeThrift(r, protocol)
+		return de.DecodeThrift(r)
 	}
 
 	defer func() {
@@ -34,7 +32,7 @@ func DecodeStruct(r io.Reader, protocol Protocol, v interface{}) (err error) {
 			err = r.(error)
 		}
 	}()
-	d := &decoder{r, protocol}
+	d := &decoder{r}
 	vo := reflect.ValueOf(v)
 	for vo.Kind() != reflect.Ptr {
 		d.error(&UnsupportedValueError{Value: vo, Str: "pointer to struct expected"})
@@ -62,7 +60,7 @@ func (d *decoder) readValue(thriftType byte, rf reflect.Value) {
 	}
 
 	if de, ok := rf.Interface().(Decoder); ok {
-		if err := de.DecodeThrift(d.r, d.p); err != nil {
+		if err := de.DecodeThrift(d.r); err != nil {
 			d.error(err)
 		}
 		return
@@ -71,13 +69,13 @@ func (d *decoder) readValue(thriftType byte, rf reflect.Value) {
 	var err error
 	switch thriftType {
 	case TypeBool:
-		if val, err := d.p.ReadBool(d.r); err != nil {
+		if val, err := d.r.ReadBool(); err != nil {
 			d.error(err)
 		} else {
 			v.SetBool(val)
 		}
 	case TypeByte:
-		if val, err := d.p.ReadByte(d.r); err != nil {
+		if val, err := d.r.ReadByte(); err != nil {
 			d.error(err)
 		} else {
 			if kind == reflect.Uint8 {
@@ -87,13 +85,13 @@ func (d *decoder) readValue(thriftType byte, rf reflect.Value) {
 			}
 		}
 	case TypeI16:
-		if val, err := d.p.ReadI16(d.r); err != nil {
+		if val, err := d.r.ReadI16(); err != nil {
 			d.error(err)
 		} else {
 			v.SetInt(int64(val))
 		}
 	case TypeI32:
-		if val, err := d.p.ReadI32(d.r); err != nil {
+		if val, err := d.r.ReadI32(); err != nil {
 			d.error(err)
 		} else {
 			if kind == reflect.Uint32 {
@@ -103,7 +101,7 @@ func (d *decoder) readValue(thriftType byte, rf reflect.Value) {
 			}
 		}
 	case TypeI64:
-		if val, err := d.p.ReadI64(d.r); err != nil {
+		if val, err := d.r.ReadI64(); err != nil {
 			d.error(err)
 		} else {
 			if kind == reflect.Uint64 {
@@ -113,7 +111,7 @@ func (d *decoder) readValue(thriftType byte, rf reflect.Value) {
 			}
 		}
 	case TypeDouble:
-		if val, err := d.p.ReadDouble(d.r); err != nil {
+		if val, err := d.r.ReadDouble(); err != nil {
 			d.error(err)
 		} else {
 			v.SetFloat(val)
@@ -123,7 +121,7 @@ func (d *decoder) readValue(thriftType byte, rf reflect.Value) {
 			elemType := v.Type().Elem()
 			elemTypeName := elemType.Name()
 			if elemType.Kind() == reflect.Uint8 && (elemTypeName == "byte" || elemTypeName == "uint8") {
-				if val, err := d.p.ReadBytes(d.r); err != nil {
+				if val, err := d.r.ReadBytes(); err != nil {
 					d.error(err)
 				} else {
 					v.SetBytes(val)
@@ -132,21 +130,21 @@ func (d *decoder) readValue(thriftType byte, rf reflect.Value) {
 				err = &UnsupportedValueError{Value: v, Str: "decoder expected a byte array"}
 			}
 		} else {
-			if val, err := d.p.ReadString(d.r); err != nil {
+			if val, err := d.r.ReadString(); err != nil {
 				d.error(err)
 			} else {
 				v.SetString(val)
 			}
 		}
 	case TypeStruct:
-		if err := d.p.ReadStructBegin(d.r); err != nil {
+		if err := d.r.ReadStructBegin(); err != nil {
 			d.error(err)
 		}
 
 		meta := encodeFields(v.Type())
 		req := meta.required
 		for {
-			ftype, id, err := d.p.ReadFieldBegin(d.r)
+			ftype, id, err := d.r.ReadFieldBegin()
 			if err != nil {
 				d.error(err)
 			}
@@ -156,7 +154,7 @@ func (d *decoder) readValue(thriftType byte, rf reflect.Value) {
 
 			ef, ok := meta.fields[int(id)]
 			if !ok {
-				SkipValue(d.r, d.p, ftype)
+				SkipValue(d.r, ftype)
 			} else {
 				req &= ^(uint64(1) << uint64(id))
 				fieldValue := v.Field(ef.i)
@@ -166,12 +164,12 @@ func (d *decoder) readValue(thriftType byte, rf reflect.Value) {
 				d.readValue(ftype, fieldValue)
 			}
 
-			if err = d.p.ReadFieldEnd(d.r); err != nil {
+			if err = d.r.ReadFieldEnd(); err != nil {
 				d.error(err)
 			}
 		}
 
-		if err := d.p.ReadStructEnd(d.r); err != nil {
+		if err := d.r.ReadStructEnd(); err != nil {
 			d.error(err)
 		}
 
@@ -188,7 +186,7 @@ func (d *decoder) readValue(thriftType byte, rf reflect.Value) {
 	case TypeMap:
 		keyType := v.Type().Key()
 		valueType := v.Type().Elem()
-		ktype, vtype, n, err := d.p.ReadMapBegin(d.r)
+		ktype, vtype, n, err := d.r.ReadMapBegin()
 		if err != nil {
 			d.error(err)
 		}
@@ -200,12 +198,12 @@ func (d *decoder) readValue(thriftType byte, rf reflect.Value) {
 			d.readValue(vtype, val)
 			v.SetMapIndex(key, val)
 		}
-		if err := d.p.ReadMapEnd(d.r); err != nil {
+		if err := d.r.ReadMapEnd(); err != nil {
 			d.error(err)
 		}
 	case TypeList:
 		elemType := v.Type().Elem()
-		et, n, err := d.p.ReadListBegin(d.r)
+		et, n, err := d.r.ReadListBegin()
 		if err != nil {
 			d.error(err)
 		}
@@ -214,13 +212,13 @@ func (d *decoder) readValue(thriftType byte, rf reflect.Value) {
 			d.readValue(et, val.Elem())
 			v.Set(reflect.Append(v, val.Elem()))
 		}
-		if err := d.p.ReadListEnd(d.r); err != nil {
+		if err := d.r.ReadListEnd(); err != nil {
 			d.error(err)
 		}
 	case TypeSet:
 		if v.Type().Kind() == reflect.Slice {
 			elemType := v.Type().Elem()
-			et, n, err := d.p.ReadSetBegin(d.r)
+			et, n, err := d.r.ReadSetBegin()
 			if err != nil {
 				d.error(err)
 			}
@@ -229,13 +227,13 @@ func (d *decoder) readValue(thriftType byte, rf reflect.Value) {
 				d.readValue(et, val.Elem())
 				v.Set(reflect.Append(v, val.Elem()))
 			}
-			if err := d.p.ReadSetEnd(d.r); err != nil {
+			if err := d.r.ReadSetEnd(); err != nil {
 				d.error(err)
 			}
 		} else if v.Type().Kind() == reflect.Map {
 			elemType := v.Type().Key()
 			valueType := v.Type().Elem()
-			et, n, err := d.p.ReadSetBegin(d.r)
+			et, n, err := d.r.ReadSetBegin()
 			if err != nil {
 				d.error(err)
 			}
@@ -250,7 +248,7 @@ func (d *decoder) readValue(thriftType byte, rf reflect.Value) {
 					v.SetMapIndex(key, reflect.Zero(valueType))
 				}
 			}
-			if err := d.p.ReadSetEnd(d.r); err != nil {
+			if err := d.r.ReadSetEnd(); err != nil {
 				d.error(err)
 			}
 		} else {
