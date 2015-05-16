@@ -76,7 +76,9 @@ func (e *encoder) writeStruct(v reflect.Value) {
 			e.error(err)
 		}
 	}
-	e.w.WriteFieldStop()
+	if err := e.w.WriteFieldStop(); err != nil {
+		e.error(err)
+	}
 	if err := e.w.WriteStructEnd(); err != nil {
 		e.error(err)
 	}

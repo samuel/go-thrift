@@ -28,6 +28,24 @@ const (
 	TypeUtf16  = 17
 )
 
+var TypeNames = map[int]string{
+	TypeStop:   "stop",
+	TypeVoid:   "void",
+	TypeBool:   "bool",
+	TypeByte:   "byte",
+	TypeDouble: "double",
+	TypeI16:    "i16",
+	TypeI32:    "i32",
+	TypeI64:    "i64",
+	TypeString: "string",
+	TypeStruct: "struct",
+	TypeMap:    "map",
+	TypeSet:    "set",
+	TypeList:   "list",
+	TypeUtf8:   "utf8",
+	TypeUtf16:  "utf16",
+}
+
 // Message types for RPC
 const (
 	MessageTypeCall      = 1
