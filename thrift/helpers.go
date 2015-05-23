@@ -1,3 +1,7 @@
+// Copyright 2012-2015 Samuel Stauffer. All rights reserved.
+// Use of this source code is governed by a 3-clause BSD
+// license that can be found in the LICENSE file.
+
 package thrift
 
 // Bool is a helper routine that allocates a new bool value to store v and returns a pointer to it.

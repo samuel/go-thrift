@@ -1,7 +1,6 @@
 language: go
 go:
-  - 1.1.2
-  - 1.2
+  - 1.4.2
   - tip
 
 branches:
@@ -11,7 +10,7 @@ branches:
 script:
   - go build ./...
   - go fmt ./...
-  - (go version | grep "version go1.1") || go get code.google.com/p/go.tools/cmd/vet
+  - go get golang.org/x/tools/cmd/vet
 #  - go vet ./...
   - go test -i -race ./...
   - go test -v -race ./...

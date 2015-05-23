@@ -1,4 +1,4 @@
-// Copyright 2012 Samuel Stauffer. All rights reserved.
+// Copyright 2012-2015 Samuel Stauffer. All rights reserved.
 // Use of this source code is governed by a 3-clause BSD
 // license that can be found in the LICENSE file.
 
@@ -79,40 +79,20 @@ func main() {
 	filename := flag.Arg(0)
 	outpath := flag.Arg(1)
 
-	// out := os.Stdout
-	// if outfilename != "-" {
-	// 	var err error
-	// 	out, err = os.OpenFile(outfilename, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0644)
-	// 	if err != nil {
-	// 		fmt.Fprintf(os.Stderr, "%s\n", err.Error())
-	// 		os.Exit(2)
-	// 	}
-	// }
-
 	p := &parser.Parser{}
 	parsedThrift, _, err := p.ParseFile(filename)
-	if e, ok := err.(*parser.ErrSyntaxError); ok {
-		fmt.Printf("%s\n", e.Left)
-		fmt.Fprintf(os.Stderr, "%s\n", err.Error())
-		os.Exit(2)
-	} else if err != nil {
+	if err != nil {
 		fmt.Fprintf(os.Stderr, "%s\n", err.Error())
 		os.Exit(2)
 	}
 
-	// fp := strings.Split(filename, "/")
-	// name := strings.Split(fp[len(fp)-1], ".")[0]
-
 	generator := &GoGenerator{
 		ThriftFiles: parsedThrift,
+		Format:      true,
 	}
 	err = generator.Generate(outpath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%s\n", err.Error())
 		os.Exit(2)
 	}
-
-	// if outfilename != "-" {
-	// 	out.Close()
-	// }
 }

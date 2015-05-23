@@ -1,0 +1,172 @@
+// Copyright 2012-2015 Samuel Stauffer. All rights reserved.
+// Use of this source code is governed by a 3-clause BSD
+// license that can be found in the LICENSE file.
+
+package parser
+
+import (
+	"bytes"
+	"encoding/json"
+	"reflect"
+	"strconv"
+	"testing"
+)
+
+func TestServiceParsing(t *testing.T) {
+	parser := &Parser{}
+	thrift, err := parser.Parse(bytes.NewBuffer([]byte(`
+		const map<string,string> M1 = {"hello": "world", "goodnight": "moon"}
+		const string S1 = "foo\"\tbar"
+		const string S2 = 'foo\'\tbar'
+		const list<i64> L = [1, 2, 3];
+
+		service ServiceNAME extends SomeBase {
+			# authenticate method
+			// comment2
+			/* some other
+			   comments */
+			string login(1:string password) throws (1:AuthenticationException authex),
+			oneway void explode();
+			blah something()
+		}
+
+		struct SomeStruct {
+			1: double dbl = 1.2,
+			2: optional string abc
+		}`)))
+	if err != nil {
+		t.Fatalf("Service parsing failed with error %s", err.Error())
+	}
+
+	if c := thrift.Constants["M1"]; c == nil {
+		t.Errorf("M1 constant missing")
+	} else if c.Name != "M1" {
+		t.Errorf("M1 name not M1, got '%s'", c.Name)
+	} else if v, e := c.Type.String(), "map<string,string>"; v != e {
+		t.Errorf("Expected type '%s' for M1, got '%s'", e, v)
+	} else if _, ok := c.Value.([]KeyValue); !ok {
+		t.Errorf("Expected []KeyValue value for M1, got %T", c.Value)
+	}
+
+	if c := thrift.Constants["S1"]; c == nil {
+		t.Errorf("S1 constant missing")
+	} else if v, e := c.Value.(string), "foo\"\tbar"; e != v {
+		t.Errorf("Excepted %s for constnat S1, got %s", strconv.Quote(e), strconv.Quote(v))
+	}
+	if c := thrift.Constants["S2"]; c == nil {
+		t.Errorf("S2 constant missing")
+	} else if v, e := c.Value.(string), "foo'\tbar"; e != v {
+		t.Errorf("Excepted %s for constnat S2, got %s", strconv.Quote(e), strconv.Quote(v))
+	}
+
+	if c := thrift.Constants["L"]; c == nil {
+		t.Errorf("L constant missing")
+	} else if v, e := c.Type.String(), "list<i64>"; v != e {
+		t.Errorf("Expected type '%s' for L, got '%s'", e, v)
+	} else if _, ok := c.Value.([]interface{}); !ok {
+		t.Errorf("Expected []interface{} value for L, got %T", c.Value)
+	}
+
+	expectedStruct := &Struct{
+		Name: "SomeStruct",
+		Fields: []*Field{
+			{
+				ID:      1,
+				Name:    "dbl",
+				Default: 1.2,
+				Type: &Type{
+					Name: "double",
+				},
+			},
+			{
+				ID:       2,
+				Name:     "abc",
+				Optional: true,
+				Type: &Type{
+					Name: "string",
+				},
+			},
+		},
+	}
+	if s := thrift.Structs["SomeStruct"]; s == nil {
+		t.Errorf("SomeStruct missing")
+	} else if !reflect.DeepEqual(s, expectedStruct) {
+		t.Errorf("Expected\n%s\ngot\n%s", pprint(expectedStruct), pprint(s))
+	}
+
+	if len(thrift.Services) != 1 {
+		t.Fatalf("Parsing service returned %d services rather than 1 as expected", len(thrift.Services))
+	}
+	svc := thrift.Services["ServiceNAME"]
+	if svc == nil || svc.Name != "ServiceNAME" {
+		t.Fatalf("Parsing service expected to find 'ServiceNAME' rather than '%+v'", thrift.Services)
+	} else if svc.Extends != "SomeBase" {
+		t.Errorf("Expected extends 'SomeBase' got '%s'", svc.Extends)
+	}
+
+	expected := map[string]*Service{
+		"ServiceNAME": &Service{
+			Name:    "ServiceNAME",
+			Extends: "SomeBase",
+			Methods: map[string]*Method{
+				"login": &Method{
+					Name: "login",
+					ReturnType: &Type{
+						Name: "string",
+					},
+					Arguments: []*Field{
+						&Field{
+							ID:       1,
+							Name:     "password",
+							Optional: false,
+							Type: &Type{
+								Name: "string",
+							},
+						},
+					},
+					Exceptions: []*Field{
+						&Field{
+							ID:       1,
+							Name:     "authex",
+							Optional: true,
+							Type: &Type{
+								Name: "AuthenticationException",
+							},
+						},
+					},
+				},
+				"explode": &Method{
+					Name:       "explode",
+					ReturnType: nil,
+					Oneway:     true,
+					Arguments:  []*Field{},
+				},
+			},
+		},
+	}
+	for n, m := range expected["ServiceNAME"].Methods {
+		if !reflect.DeepEqual(svc.Methods[n], m) {
+			t.Fatalf("Parsing service returned method\n%s\ninstead of\n%s", pprint(svc.Methods[n]), pprint(m))
+		}
+	}
+}
+
+// func TestParseFile(t *testing.T) {
+// 	th, err := ParseFile("../testfiles/full.thrift")
+// 	if err != nil {
+// 		t.Fatal(err)
+// 	}
+// 	b, err := json.MarshalIndent(th, "", "    ")
+// 	if err != nil {
+// 		t.Fatal(err)
+// 	}
+// 	_ = b
+// }
+
+func pprint(v interface{}) string {
+	b, err := json.MarshalIndent(v, "", "    ")
+	if err != nil {
+		panic(err)
+	}
+	return string(b)
+}

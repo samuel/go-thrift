@@ -1,4 +1,4 @@
-// Copyright 2012 Samuel Stauffer. All rights reserved.
+// Copyright 2012-2015 Samuel Stauffer. All rights reserved.
 // Use of this source code is governed by a 3-clause BSD
 // license that can be found in the LICENSE file.
 
@@ -16,6 +16,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 
 	"github.com/samuel/go-thrift/parser"
@@ -54,6 +55,7 @@ type GoGenerator struct {
 
 	ThriftFiles map[string]*parser.Thrift
 	Packages    map[string]GoPackage
+	Format      bool
 }
 
 var goKeywords = map[string]bool{
@@ -226,7 +228,7 @@ func (g *GoGenerator) formatField(field *parser.Field) string {
 	}
 	return fmt.Sprintf(
 		"%s %s `thrift:\"%d%s\" json:\"%s%s\"`",
-		camelCase(field.Name), g.formatType(g.pkg, g.thrift, field.Type, field.Optional), field.Id, tags, field.Name, jsonTags)
+		camelCase(field.Name), g.formatType(g.pkg, g.thrift, field.Type, field.Optional), field.ID, tags, field.Name, jsonTags)
 }
 
 func (g *GoGenerator) formatArguments(arguments []*parser.Field) string {
@@ -250,8 +252,18 @@ func (g *GoGenerator) formatReturnType(typ *parser.Type, named bool) string {
 	return fmt.Sprintf("(%s, error)", g.formatType(g.pkg, g.thrift, typ, false))
 }
 
-func (g *GoGenerator) writeConstant(out io.Writer, c *parser.Constant) error {
-	return g.write(out, "\nconst %s = %+v\n", camelCase(c.Name), c.Value)
+func (g *GoGenerator) formatValue(v interface{}) (string, error) {
+	switch v2 := v.(type) {
+	case string:
+		return strconv.Quote(v2), nil
+	case int:
+		return strconv.Itoa(v2), nil
+	case int64:
+		return strconv.FormatInt(v2, 10), nil
+	case float64:
+		return strconv.FormatFloat(v2, 'f', -1, 64), nil
+	}
+	return "", fmt.Errorf("unsupported value type %T", v)
 }
 
 func (g *GoGenerator) writeEnum(out io.Writer, enum *parser.Enum) error {
@@ -441,7 +453,7 @@ func (g *GoGenerator) writeService(out io.Writer, svc *parser.Service) error {
 			// Response struct
 			args := make([]*parser.Field, 0, len(method.Exceptions))
 			if method.ReturnType != nil && method.ReturnType.Name != "void" {
-				args = append(args, &parser.Field{Id: 0, Name: "value", Optional: true /*len(method.Exceptions) != 0*/, Type: method.ReturnType, Default: nil})
+				args = append(args, &parser.Field{ID: 0, Name: "value", Optional: true /*len(method.Exceptions) != 0*/, Type: method.ReturnType, Default: nil})
 			}
 			for _, ex := range method.Exceptions {
 				args = append(args, ex)
@@ -550,7 +562,11 @@ func (g *GoGenerator) generateSingle(out io.Writer, thriftPath string, thrift *p
 		g.write(out, "\nconst (\n")
 		for _, k := range sortedKeys(thrift.Constants) {
 			c := thrift.Constants[k]
-			g.write(out, "\t%s = %+v\n", camelCase(c.Name), c.Value)
+			v, err := g.formatValue(c.Value)
+			if err != nil {
+				g.error(err)
+			}
+			g.write(out, "\t%s = %+v\n", camelCase(c.Name), v)
 		}
 		g.write(out, ")\n")
 	}
@@ -646,7 +662,7 @@ func (g *GoGenerator) Generate(outPath string) (err error) {
 		}
 
 		outBytes := out.Bytes()
-		if true {
+		if g.Format {
 			outBytes, err = format.Source(outBytes)
 			if err != nil {
 				g.error(err)

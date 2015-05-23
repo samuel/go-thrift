@@ -1,0 +1,336 @@
+{
+package parser
+
+import (
+	"bytes"
+	"strconv"
+)
+
+type namespace struct {
+	language string
+	namespace string
+}
+
+type typeDef struct {
+	name string
+	typ *Type
+}
+
+type exception *Struct
+
+func toIfaceSlice(v interface{}) []interface{} {
+    if v == nil {
+        return nil
+    }
+    return v.([]interface{})
+}
+
+func ifaceSliceToString(v interface{}) string {
+	ifs := toIfaceSlice(v)
+	b := make([]byte, len(ifs))
+	for i, v := range ifs {
+		b[i] = v.([]uint8)[0]
+	}
+	return string(b)
+}
+}
+
+Grammer ← __ statements:( Statement __ )+ (EOF / SyntaxError) {
+	thrift := &Thrift{
+		Namespaces: make(map[string]string),
+		Typedefs: make(map[string]*Type),
+		Constants: make(map[string]*Constant),
+		Enums: make(map[string]*Enum),
+		Structs: make(map[string]*Struct),
+		Exceptions: make(map[string]*Struct),
+		Services: make(map[string]*Service),
+	}
+	stmts := toIfaceSlice(statements)
+	for _, st := range stmts {
+		switch v := st.([]interface{})[0].(type) {
+		case *namespace:
+			thrift.Namespaces[v.language] = v.namespace
+		case *Constant:
+			thrift.Constants[v.Name] = v
+		case *Enum:
+			thrift.Enums[v.Name] = v
+		case *typeDef:
+			thrift.Typedefs[v.name] = v.typ
+		case *Struct:
+			thrift.Structs[v.Name] = v
+		case exception:
+			thrift.Exceptions[v.Name] = (*Struct)(v)
+		case *Service:
+			thrift.Services[v.Name] = v
+		default:
+			return nil, fmt.Errorf("parser: unknown value %#v", v)
+		}
+	}
+	return thrift, nil
+}
+
+SyntaxError ← . {
+	return nil, errors.New("parser: syntax error")
+}
+
+// Top level statements
+
+Statement ← Namespace / Const / Enum / TypeDef / Struct / Exception / Service
+
+Namespace ← "namespace" _ language:[a-z]+ _ ns:[a-zA-z.]+ EOS {
+	return &namespace{
+		language: ifaceSliceToString(language),
+		namespace: ifaceSliceToString(ns),
+	}, nil
+}
+
+Const ← "const" _ typ:FieldType _ name:Identifier _ "=" _ value:ConstValue EOS {
+	return &Constant{
+		Name: string(name.(Identifier)),
+		Type: typ.(*Type),
+		Value: value,
+	}, nil
+}
+
+Enum ← "enum" _ name:Identifier _ '{' __ values:(EnumValue __)* '}' EOS {
+	vs := toIfaceSlice(values)
+	en := &Enum{
+		Name: string(name.(Identifier)),
+		Values: make(map[string]*EnumValue, len(vs)),
+	}
+	// Assigns numbers in order. This will behave badly if some values are
+	// defined and other are not, but I think that's ok since that's a silly
+	// thing to do.
+	next := 0
+	for _, v := range vs {
+		ev := v.([]interface{})[0].(*EnumValue)
+		if ev.Value < 0 {
+			ev.Value = next
+		}
+		if ev.Value >= next {
+			next = ev.Value + 1
+		}
+		en.Values[ev.Name] = ev
+	}
+	return en, nil
+}
+
+// TODO: support names without values
+EnumValue ← name:Identifier _ value:('=' _ IntConstant)? ListSeparator? {
+	ev := &EnumValue{
+		Name: string(name.(Identifier)),
+		Value: -1,
+	}
+	if value != nil {
+		ev.Value = int(value.([]interface{})[2].(int64))
+	}
+	return ev, nil
+}
+
+TypeDef ← "typedef" _ typ:FieldType _ name:Identifier EOS {
+	return &typeDef{
+		name: string(name.(Identifier)),
+		typ: typ.(*Type),
+	}, nil
+}
+
+Struct ← "struct" _ st:StructLike { return st.(*Struct), nil }
+Exception ← "exception" _ st:StructLike { return exception(st.(*Struct)), nil }
+StructLike ← name:Identifier _ '{' __ fields:FieldList '}' EOS {
+	st := &Struct{
+		Name: string(name.(Identifier)),
+	}
+	if fields != nil {
+		st.Fields = fields.([]*Field)
+	}
+	return st, nil
+}
+
+FieldList ← fields:(Field __)* {
+	fs := fields.([]interface{})
+	flds := make([]*Field, len(fs))
+	for i, f := range fs {
+		flds[i] = f.([]interface{})[0].(*Field)
+	}
+	return flds, nil
+}
+
+Field ← id:IntConstant _ ':' _ req:FieldReq? _ typ:FieldType _ name:Identifier _ def:('=' _ ConstValue)? ListSeparator? {
+	f := &Field{
+		ID       : int(id.(int64)),
+		Name     : string(name.(Identifier)),
+		Type     : typ.(*Type),
+	}
+	if req != nil && !req.(bool) {
+		f.Optional = true
+	}
+	if def != nil {
+		f.Default = def.([]interface{})[2]
+	}
+	return f, nil
+}
+
+FieldReq ← ("required" / "optional") {
+	return !bytes.Equal(c.text, []byte("optional")), nil
+}
+
+Service ← "service" _ name:Identifier _ extends:("extends" __ Identifier __)? __ '{' __ methods:(Function __)* ('}' / EndOfServiceError) EOS {
+	ms := methods.([]interface{})
+	svc := &Service{
+		Name: string(name.(Identifier)),
+		Methods: make(map[string]*Method, len(ms)),
+	}
+	if extends != nil {
+		svc.Extends = string(extends.([]interface{})[2].(Identifier))
+	}
+	for _, m := range ms {
+		mt :=  m.([]interface{})[0].(*Method)
+		svc.Methods[mt.Name] = mt
+	}
+	return svc, nil
+}
+EndOfServiceError ← . {
+	return nil, errors.New("parser: expected end of service")
+}
+
+Function ← oneway:("oneway" __)? typ:FunctionType __ name:Identifier _ '(' __ arguments:FieldList ')' __ exceptions:Throws? ListSeparator? {
+	m := &Method{
+		Name: string(name.(Identifier)),
+	}
+	t := typ.(*Type)
+	if t.Name != "void" {
+		m.ReturnType = t
+	}
+	if oneway != nil {
+		m.Oneway = true
+	}
+	if arguments != nil {
+		m.Arguments = arguments.([]*Field)
+	}
+	if exceptions != nil {
+		m.Exceptions = exceptions.([]*Field)
+		for _, e := range m.Exceptions {
+			e.Optional = true
+		}
+	}
+	return m, nil
+}
+
+FunctionType ← typ:("void" / FieldType) {
+	if t, ok := typ.(*Type); ok {
+		return t, nil
+	}
+	return &Type{Name: string(c.text)}, nil
+}
+
+Throws ← "throws" __ '(' __ exceptions:FieldList ')' {
+	return exceptions, nil
+}
+
+FieldType ← typ:(BaseType / ContainerType / Identifier) {
+	if t, ok := typ.(Identifier); ok {
+		return &Type{Name: string(t)}, nil
+	}
+	return typ, nil
+}
+
+DefinitionType ← typ:(BaseType / ContainerType) {
+	return typ, nil
+}
+
+BaseType ← ("bool" / "byte" / "i16" / "i32" / "i64" / "double" / "string" / "binary" ) {
+	return &Type{Name: string(c.text)}, nil
+}
+
+ContainerType ← typ:(MapType / SetType / ListType) {
+	return typ, nil
+}
+
+MapType ← CppType? "map<" WS key:FieldType WS "," WS value:FieldType WS ">" {
+	return &Type{
+		Name: "map",
+		KeyType: key.(*Type),
+		ValueType: value.(*Type),
+	}, nil
+}
+
+SetType ← CppType? "set<" WS typ:FieldType WS ">" {
+	return &Type{
+		Name: "set",
+		ValueType: typ.(*Type),
+	}, nil
+}
+
+ListType ← "list<" WS typ:FieldType WS ">" {
+	return &Type{
+		Name: "list",
+		ValueType: typ.(*Type),
+	}, nil
+}
+
+CppType ← "cpp_type" cppType:Literal {
+	return cppType, nil
+}
+
+ConstValue ← Literal / DoubleConstant / IntConstant / ConstMap / ConstList / Identifier
+
+IntConstant ← [-+]? Digit+ {
+	return strconv.ParseInt(string(c.text), 10, 64)
+}
+
+DoubleConstant ← [+-]? Digit* '.' Digit* ( ['Ee'] IntConstant )? {
+	return strconv.ParseFloat(string(c.text), 64)
+}
+
+ConstList ← '[' __ values:(ConstValue __ ListSeparator? __)* __ ']' {
+	return values, nil
+}
+
+ConstMap ← '{' __ values:(ConstValue __ ':' __ ConstValue __ (',' / &'}') __)* '}' {
+	if values == nil {
+		return nil, nil
+	}
+	vals := values.([]interface{})
+	kvs := make([]KeyValue, len(vals))
+	for i, kv := range vals {
+		v := kv.([]interface{})
+		kvs[i] = KeyValue{
+			Key: v[0],
+			Value: v[4],
+		}
+	}
+	return kvs, nil
+}
+
+Literal ← (('"' (`\"` / [^"])* '"') / ('\'' (`\'` / [^'])* '\'')) {
+	if len(c.text) != 0 && c.text[0] == '\'' {
+		return strconv.Unquote(`"` + strings.Replace(string(c.text[1:len(c.text)-1]), `\'`, `'`, -1) + `"`)
+	}
+	return strconv.Unquote(string(c.text))
+}
+
+Identifier ← (Letter / '_')+ (Letter / Digit / [._])* {
+	return Identifier(string(c.text)), nil
+}
+
+ListSeparator ← [,;]
+Letter ← [A-Za-z]
+Digit ← [0-9]
+
+//
+
+SourceChar ← .
+Comment ← MultiLineComment / SingleLineComment
+MultiLineComment ← "/*" ( !"*/" SourceChar )* "*/"
+MultiLineCommentNoLineTerminator ← "/*" ( !( "*/" / EOL ) SourceChar )* "*/"
+SingleLineComment ← ("//" ( !EOL SourceChar )*) / ("#" ( !EOL SourceChar )*)
+
+__ ← ( Whitespace / EOL / Comment )*
+_ ← ( Whitespace / MultiLineCommentNoLineTerminator )*
+WS ← Whitespace*
+
+Whitespace ← [ \t\r]
+EOL ← '\n'
+EOS ← __ ';' / _ SingleLineComment? EOL / __ EOF
+
+EOF ← !.
