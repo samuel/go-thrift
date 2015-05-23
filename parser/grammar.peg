@@ -115,7 +115,6 @@ Enum ← "enum" _ name:Identifier _ '{' __ values:(EnumValue __)* '}' EOS {
 	return en, nil
 }
 
-// TODO: support names without values
 EnumValue ← name:Identifier _ value:('=' _ IntConstant)? ListSeparator? {
 	ev := &EnumValue{
 		Name: string(name.(Identifier)),
