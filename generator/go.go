@@ -252,7 +252,7 @@ func (g *GoGenerator) formatReturnType(typ *parser.Type, named bool) string {
 	return fmt.Sprintf("(%s, error)", g.formatType(g.pkg, g.thrift, typ, false))
 }
 
-func (g *GoGenerator) formatValue(v interface{}) (string, error) {
+func (g *GoGenerator) formatValue(v interface{}, t *parser.Type) (string, error) {
 	switch v2 := v.(type) {
 	case string:
 		return strconv.Quote(v2), nil
@@ -262,6 +262,42 @@ func (g *GoGenerator) formatValue(v interface{}) (string, error) {
 		return strconv.FormatInt(v2, 10), nil
 	case float64:
 		return strconv.FormatFloat(v2, 'f', -1, 64), nil
+	case []interface{}:
+		buf := &bytes.Buffer{}
+		buf.WriteString(g.formatType(g.pkg, g.thrift, t, false))
+		buf.WriteString("{\n")
+		for _, v := range v2 {
+			buf.WriteString("\t\t")
+			s, err := g.formatValue(v, t.ValueType)
+			if err != nil {
+				return "", err
+			}
+			buf.WriteString(s)
+			buf.WriteString(",\n")
+		}
+		buf.WriteString("\t}")
+		return buf.String(), nil
+	case []parser.KeyValue:
+		buf := &bytes.Buffer{}
+		buf.WriteString(g.formatType(g.pkg, g.thrift, t, false))
+		buf.WriteString("{\n")
+		for _, kv := range v2 {
+			buf.WriteString("\t\t")
+			s, err := g.formatValue(kv.Key, t.KeyType)
+			if err != nil {
+				return "", err
+			}
+			buf.WriteString(s)
+			buf.WriteString(": ")
+			s, err = g.formatValue(kv.Value, t.ValueType)
+			if err != nil {
+				return "", err
+			}
+			buf.WriteString(s)
+			buf.WriteString(",\n")
+		}
+		buf.WriteString("\t}")
+		return buf.String(), nil
 	}
 	return "", fmt.Errorf("unsupported value type %T", v)
 }
@@ -559,16 +595,19 @@ func (g *GoGenerator) generateSingle(out io.Writer, thriftPath string, thrift *p
 	//
 
 	if len(thrift.Constants) > 0 {
-		g.write(out, "\nconst (\n")
 		for _, k := range sortedKeys(thrift.Constants) {
 			c := thrift.Constants[k]
-			v, err := g.formatValue(c.Value)
+			v, err := g.formatValue(c.Value, c.Type)
 			if err != nil {
 				g.error(err)
 			}
+			if c.Type.Name == "list" || c.Type.Name == "map" {
+				g.write(out, "var ")
+			} else {
+				g.write(out, "const ")
+			}
 			g.write(out, "\t%s = %+v\n", camelCase(c.Name), v)
 		}
-		g.write(out, ")\n")
 	}
 
 	for _, k := range sortedKeys(thrift.Enums) {

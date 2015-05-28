@@ -59,12 +59,18 @@ func TestServiceParsing(t *testing.T) {
 		t.Errorf("Excepted %s for constnat S2, got %s", strconv.Quote(e), strconv.Quote(v))
 	}
 
+	expConst := &Constant{
+		Name: "L",
+		Type: &Type{
+			Name:      "list",
+			ValueType: &Type{Name: "i64"},
+		},
+		Value: []interface{}{int64(1), int64(2), int64(3)},
+	}
 	if c := thrift.Constants["L"]; c == nil {
 		t.Errorf("L constant missing")
-	} else if v, e := c.Type.String(), "list<i64>"; v != e {
-		t.Errorf("Expected type '%s' for L, got '%s'", e, v)
-	} else if _, ok := c.Value.([]interface{}); !ok {
-		t.Errorf("Expected []interface{} value for L, got %T", c.Value)
+	} else if !reflect.DeepEqual(c, expConst) {
+		t.Errorf("Expected for L:\n%s\ngot\n%s", pprint(expConst), pprint(c))
 	}
 
 	expectedStruct := &Struct{

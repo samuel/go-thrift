@@ -282,7 +282,12 @@ DoubleConstant ← [+-]? Digit* '.' Digit* ( ['Ee'] IntConstant )? {
 }
 
 ConstList ← '[' __ values:(ConstValue __ ListSeparator? __)* __ ']' {
-	return values, nil
+	valueSlice := values.([]interface{})
+	vs := make([]interface{}, len(valueSlice))
+	for i, v := range valueSlice {
+		vs[i] = v.([]interface{})[0]
+	}
+	return vs, nil
 }
 
 ConstMap ← '{' __ values:(ConstValue __ ':' __ ConstValue __ (',' / &'}') __)* '}' {
