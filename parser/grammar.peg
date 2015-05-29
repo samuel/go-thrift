@@ -4,6 +4,7 @@ package parser
 import (
 	"bytes"
 	"strconv"
+	"strings"
 )
 
 type namespace struct {
@@ -17,6 +18,8 @@ type typeDef struct {
 }
 
 type exception *Struct
+
+type include string
 
 func toIfaceSlice(v interface{}) []interface{} {
     if v == nil {
@@ -35,8 +38,9 @@ func ifaceSliceToString(v interface{}) string {
 }
 }
 
-Grammer ← __ statements:( Statement __ )+ (EOF / SyntaxError) {
+Grammer ← __ statements:( Statement __ )* (EOF / SyntaxError) {
 	thrift := &Thrift{
+		Includes: make(map[string]string),
 		Namespaces: make(map[string]string),
 		Typedefs: make(map[string]*Type),
 		Constants: make(map[string]*Constant),
@@ -62,6 +66,12 @@ Grammer ← __ statements:( Statement __ )+ (EOF / SyntaxError) {
 			thrift.Exceptions[v.Name] = (*Struct)(v)
 		case *Service:
 			thrift.Services[v.Name] = v
+		case include:
+			name := string(v)
+			if ix := strings.LastIndex(name, "."); ix > 0 {
+				name = name[:ix]
+			}
+			thrift.Includes[name] = string(v)
 		default:
 			return nil, fmt.Errorf("parser: unknown value %#v", v)
 		}
@@ -73,9 +83,11 @@ SyntaxError ← . {
 	return nil, errors.New("parser: syntax error")
 }
 
-// Top level statements
+Include ← "include" _ file:Literal EOS {
+	return include(file.(string)), nil
+}
 
-Statement ← Namespace / Const / Enum / TypeDef / Struct / Exception / Service
+Statement ← Include / Namespace / Const / Enum / TypeDef / Struct / Exception / Service
 
 Namespace ← "namespace" _ language:[a-z]+ _ ns:[a-zA-z.]+ EOS {
 	return &namespace{

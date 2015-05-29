@@ -15,6 +15,10 @@ import (
 func TestServiceParsing(t *testing.T) {
 	parser := &Parser{}
 	thrift, err := parser.Parse(bytes.NewBuffer([]byte(`
+		include "other.thrift"
+
+		namespace go somepkg
+
 		const map<string,string> M1 = {"hello": "world", "goodnight": "moon"}
 		const string S1 = "foo\"\tbar"
 		const string S2 = 'foo\'\tbar'
@@ -36,6 +40,10 @@ func TestServiceParsing(t *testing.T) {
 		}`)))
 	if err != nil {
 		t.Fatalf("Service parsing failed with error %s", err.Error())
+	}
+
+	if thrift.Includes["other"] != "other.thrift" {
+		t.Errorf("Include not parsed: %+v", thrift.Includes)
 	}
 
 	if c := thrift.Constants["M1"]; c == nil {
