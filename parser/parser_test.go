@@ -18,6 +18,7 @@ func TestServiceParsing(t *testing.T) {
 		include "other.thrift"
 
 		namespace go somepkg
+		namespace python some.module123
 
 		const map<string,string> M1 = {"hello": "world", "goodnight": "moon"}
 		const string S1 = "foo\"\tbar"

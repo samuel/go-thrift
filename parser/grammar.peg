@@ -89,10 +89,10 @@ Include ← "include" _ file:Literal EOS {
 
 Statement ← Include / Namespace / Const / Enum / TypeDef / Struct / Exception / Service
 
-Namespace ← "namespace" _ language:[a-z]+ _ ns:[a-zA-z.]+ EOS {
+Namespace ← "namespace" _ language:[a-z]+ _ ns:Identifier EOS {
 	return &namespace{
 		language: ifaceSliceToString(language),
-		namespace: ifaceSliceToString(ns),
+		namespace: string(ns.(Identifier)),
 	}, nil
 }
 
