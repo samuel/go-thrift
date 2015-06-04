@@ -8,7 +8,7 @@ import (
 )
 
 type namespace struct {
-	language string
+	scope string
 	namespace string
 }
 
@@ -53,7 +53,7 @@ Grammer ← __ statements:( Statement __ )* (EOF / SyntaxError) {
 	for _, st := range stmts {
 		switch v := st.([]interface{})[0].(type) {
 		case *namespace:
-			thrift.Namespaces[v.language] = v.namespace
+			thrift.Namespaces[v.scope] = v.namespace
 		case *Constant:
 			thrift.Constants[v.Name] = v
 		case *Enum:
@@ -89,9 +89,9 @@ Include ← "include" _ file:Literal EOS {
 
 Statement ← Include / Namespace / Const / Enum / TypeDef / Struct / Exception / Service
 
-Namespace ← "namespace" _ language:[a-z]+ _ ns:Identifier EOS {
+Namespace ← "namespace" _ scope:[a-z.-]+ _ ns:Identifier EOS {
 	return &namespace{
-		language: ifaceSliceToString(language),
+		scope: ifaceSliceToString(scope),
 		namespace: string(ns.(Identifier)),
 	}, nil
 }
