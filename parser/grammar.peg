@@ -38,7 +38,7 @@ func ifaceSliceToString(v interface{}) string {
 }
 }
 
-Grammer ← __ statements:( Statement __ )* (EOF / SyntaxError) {
+Grammar ← __ statements:( Statement __ )* (EOF / SyntaxError) {
 	thrift := &Thrift{
 		Includes: make(map[string]string),
 		Namespaces: make(map[string]string),
