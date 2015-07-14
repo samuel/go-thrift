@@ -147,7 +147,7 @@ TypeDef ← "typedef" _ typ:FieldType _ name:Identifier EOS {
 
 Struct ← "struct" _ st:StructLike { return st.(*Struct), nil }
 Exception ← "exception" _ st:StructLike { return exception(st.(*Struct)), nil }
-StructLike ← name:Identifier _ '{' __ fields:FieldList '}' EOS {
+StructLike ← name:Identifier __ '{' __ fields:FieldList '}' EOS {
 	st := &Struct{
 		Name: string(name.(Identifier)),
 	}
