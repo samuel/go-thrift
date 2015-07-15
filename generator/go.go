@@ -689,7 +689,7 @@ func (g *GoGenerator) Generate(outPath string) (err error) {
 		pkgpath := filepath.Join(outPath, pkg.Path, pkg.Name)
 		outfile := filepath.Join(pkgpath, filename)
 
-		if err := os.MkdirAll(pkgpath, 0755); err != nil && !os.IsExist(err) {
+		if err := os.MkdirAll(pkgpath, 0755); err != nil {
 			g.error(err)
 		}
 
