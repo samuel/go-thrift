@@ -273,6 +273,9 @@ func (g *GoGenerator) formatValue(v interface{}, t *parser.Type) (string, error)
 				return "", err
 			}
 			buf.WriteString(s)
+			if t.Name == "set" {
+				buf.WriteString(": struct{}{}")
+			}
 			buf.WriteString(",\n")
 		}
 		buf.WriteString("\t}")
