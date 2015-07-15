@@ -301,6 +301,8 @@ func (g *GoGenerator) formatValue(v interface{}, t *parser.Type) (string, error)
 		}
 		buf.WriteString("\t}")
 		return buf.String(), nil
+	case parser.Identifier:
+		return string(v2), nil
 	}
 	return "", fmt.Errorf("unsupported value type %T", v)
 }
