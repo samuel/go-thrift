@@ -191,7 +191,7 @@ type encodeField struct {
 }
 
 type structMeta struct {
-	required uint64 // bitmap of required fields
+	required *BitSet // bitmap of required fields
 	fields   map[int]encodeField
 }
 
@@ -219,6 +219,7 @@ func encodeFields(t reflect.Type) structMeta {
 
 	fs := make(map[int]encodeField)
 	m = structMeta{fields: fs}
+	m.required = new(BitSet)
 	v := reflect.Zero(t)
 	n := v.NumField()
 	for i := 0; i < n; i++ {
@@ -241,15 +242,11 @@ func encodeFields(t reflect.Type) structMeta {
 				continue
 			}
 			id, opts := parseTag(tv)
-			if id >= 64 {
-				// TODO: figure out a better way to deal with this
-				panic("thrift: field id must be < 64")
-			}
 			ef.id = id
 			ef.name = f.Name
 			ef.required = opts.Contains("required")
 			if ef.required {
-				m.required |= 1 << byte(id)
+				m.required.Set(id)
 			}
 			ef.keepEmpty = opts.Contains("keepempty")
 			if opts.Contains("set") {

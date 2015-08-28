@@ -156,7 +156,7 @@ func (d *decoder) readValue(thriftType byte, rf reflect.Value) {
 			if !ok {
 				SkipValue(d.r, ftype)
 			} else {
-				req &= ^(uint64(1) << uint64(id))
+				req.Clear(id)
 				fieldValue := v.Field(ef.i)
 				if ftype != ef.fieldType {
 					d.error(&UnsupportedValueError{Value: fieldValue, Str: "type mismatch"})
@@ -173,14 +173,15 @@ func (d *decoder) readValue(thriftType byte, rf reflect.Value) {
 			d.error(err)
 		}
 
-		if req != 0 {
-			for i := 0; req != 0; i, req = i+1, req>>1 {
-				if req&1 != 0 {
+		if !req.IsEmpty() {
+			for i := 0; !req.IsEmpty(); i++ {
+				if req.IsSet(i) {
 					d.error(&MissingRequiredField{
 						StructName: v.Type().Name(),
 						FieldName:  meta.fields[i].name,
 					})
 				}
+				req.Clear(i)
 			}
 		}
 	case TypeMap:
