@@ -26,6 +26,12 @@ func TestServiceParsing(t *testing.T) {
 		const string S2 = 'foo\'\tbar'
 		const list<i64> L = [1, 2, 3];
 
+		union myUnion {
+			1: double dbl = 1.1;
+			2: string str = "2";
+			3: i32 int32 = 3;
+		}
+
 		service ServiceNAME extends SomeBase {
 			# authenticate method
 			// comment2
@@ -108,6 +114,41 @@ func TestServiceParsing(t *testing.T) {
 		t.Errorf("SomeStruct missing")
 	} else if !reflect.DeepEqual(s, expectedStruct) {
 		t.Errorf("Expected\n%s\ngot\n%s", pprint(expectedStruct), pprint(s))
+	}
+
+	expectedUnion := &Struct{
+		Name: "myUnion",
+		Fields: []*Field{
+			{
+				ID:      1,
+				Name:    "dbl",
+				Default: 1.1,
+				Type: &Type{
+					Name: "double",
+				},
+			},
+			{
+				ID:      2,
+				Name:    "str",
+				Default: "2",
+				Type: &Type{
+					Name: "string",
+				},
+			},
+			{
+				ID:      3,
+				Name:    "int32",
+				Default: int64(3),
+				Type: &Type{
+					Name: "i32",
+				},
+			},
+		},
+	}
+	if u := thrift.Unions["myUnion"]; u == nil {
+		t.Errorf("myUnion missing")
+	} else if !reflect.DeepEqual(u, expectedUnion) {
+		t.Errorf("Expected\n%s\ngot\n%s", pprint(expectedUnion), pprint(u))
 	}
 
 	if len(thrift.Services) != 1 {
