@@ -649,6 +649,13 @@ func (g *GoGenerator) generateSingle(out io.Writer, thriftPath string, thrift *p
 		}
 	}
 
+	for _, k := range sortedKeys(thrift.Unions) {
+		un := thrift.Unions[k]
+		if err := g.writeStruct(out, un); err != nil {
+			g.error(err)
+		}
+	}
+
 	for _, k := range sortedKeys(thrift.Services) {
 		svc := thrift.Services[k]
 		if err := g.writeService(out, svc); err != nil {
