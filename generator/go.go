@@ -205,6 +205,13 @@ func (g *GoGenerator) formatType(pkg string, thrift *parser.Thrift, typ *parser.
 		}
 		return "*" + name
 	}
+	if u := thrift.Unions[typ.Name]; u != nil {
+		name := u.Name
+		if pkg != g.pkg {
+			name = pkg + "." + name
+		}
+		return "*" + name
+	}
 
 	g.error(ErrUnknownType(typ.Name))
 	return ""
