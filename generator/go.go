@@ -606,6 +606,12 @@ func (g *GoGenerator) generateSingle(out io.Writer, thriftPath string, thrift *p
 			if err != nil {
 				g.error(err)
 			}
+			// If a constant value is an identifier, it must be to another constant
+			// which we format using camelCase.
+			if identifier, ok := c.Value.(parser.Identifier); ok {
+				v = camelCase(string(identifier))
+			}
+
 			if c.Type.Name == "list" || c.Type.Name == "map" || c.Type.Name == "set" {
 				g.write(out, "var ")
 			} else {
