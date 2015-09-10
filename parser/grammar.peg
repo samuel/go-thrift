@@ -21,6 +21,8 @@ type typeDef struct {
 
 type exception *Struct
 
+type union *Struct
+
 type include string
 
 func toIfaceSlice(v interface{}) []interface{} {
@@ -38,6 +40,15 @@ func ifaceSliceToString(v interface{}) string {
 	}
 	return string(b)
 }
+
+// toStruct converts a union to a struct with all fields optional.
+func unionToStruct(u union) *Struct {
+	st := (*Struct)(u)
+	for _, f := range st.Fields {
+		f.Optional = true
+	}
+	return st
+}
 }
 
 Grammar ← __ statements:( Statement __ )* (EOF / SyntaxError) {
@@ -49,6 +60,7 @@ Grammar ← __ statements:( Statement __ )* (EOF / SyntaxError) {
 		Enums: make(map[string]*Enum),
 		Structs: make(map[string]*Struct),
 		Exceptions: make(map[string]*Struct),
+		Unions: make(map[string]*Struct),
 		Services: make(map[string]*Service),
 	}
 	stmts := toIfaceSlice(statements)
@@ -66,6 +78,8 @@ Grammar ← __ statements:( Statement __ )* (EOF / SyntaxError) {
 			thrift.Structs[v.Name] = v
 		case exception:
 			thrift.Exceptions[v.Name] = (*Struct)(v)
+		case union:
+			thrift.Unions[v.Name] = unionToStruct(v)
 		case *Service:
 			thrift.Services[v.Name] = v
 		case include:
@@ -89,7 +103,7 @@ Include ← "include" _ file:Literal EOS {
 	return include(file.(string)), nil
 }
 
-Statement ← Include / Namespace / Const / Enum / TypeDef / Struct / Exception / Service
+Statement ← Include / Namespace / Const / Enum / TypeDef / Struct / Exception / Union / Service
 
 Namespace ← "namespace" _ scope:[a-z.-]+ _ ns:Identifier EOS {
 	return &namespace{
@@ -149,6 +163,7 @@ TypeDef ← "typedef" _ typ:FieldType _ name:Identifier EOS {
 
 Struct ← "struct" _ st:StructLike { return st.(*Struct), nil }
 Exception ← "exception" _ st:StructLike { return exception(st.(*Struct)), nil }
+Union ← "union" _ st:StructLike { return union(st.(*Struct)), nil }
 StructLike ← name:Identifier __ '{' __ fields:FieldList '}' EOS {
 	st := &Struct{
 		Name: string(name.(Identifier)),

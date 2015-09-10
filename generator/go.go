@@ -205,6 +205,13 @@ func (g *GoGenerator) formatType(pkg string, thrift *parser.Thrift, typ *parser.
 		}
 		return "*" + name
 	}
+	if u := thrift.Unions[typ.Name]; u != nil {
+		name := u.Name
+		if pkg != g.pkg {
+			name = pkg + "." + name
+		}
+		return "*" + name
+	}
 
 	g.error(ErrUnknownType(typ.Name))
 	return ""
@@ -638,6 +645,13 @@ func (g *GoGenerator) generateSingle(out io.Writer, thriftPath string, thrift *p
 	for _, k := range sortedKeys(thrift.Exceptions) {
 		ex := thrift.Exceptions[k]
 		if err := g.writeException(out, ex); err != nil {
+			g.error(err)
+		}
+	}
+
+	for _, k := range sortedKeys(thrift.Unions) {
+		un := thrift.Unions[k]
+		if err := g.writeStruct(out, un); err != nil {
 			g.error(err)
 		}
 	}

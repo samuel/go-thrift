@@ -64,6 +64,7 @@ type Thrift struct {
 	Enums      map[string]*Enum
 	Structs    map[string]*Struct
 	Exceptions map[string]*Struct
+	Unions     map[string]*Struct
 	Services   map[string]*Service
 }
 
