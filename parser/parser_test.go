@@ -167,6 +167,33 @@ func TestServiceParsing(t *testing.T) {
 	}
 }
 
+func TestParseConstant(t *testing.T) {
+	parser := &Parser{}
+	thrift, err := parser.Parse(bytes.NewBuffer([]byte(`
+		const string C1 = "test"
+		const string C2 = C1
+		`)))
+	if err != nil {
+		t.Fatalf("Service parsing failed with error %s", err.Error())
+	}
+
+	expected := map[string]*Constant{
+		"C1": &Constant{
+			Name:  "C1",
+			Type:  &Type{Name: "string"},
+			Value: "test",
+		},
+		"C2": &Constant{
+			Name:  "C2",
+			Type:  &Type{Name: "string"},
+			Value: Identifier("C1"),
+		},
+	}
+	if got := thrift.Constants; !reflect.DeepEqual(expected, got) {
+		t.Errorf("Unexpected constant parsing got\n%s\ninstead of\n%s", pprint(expected), pprint(got))
+	}
+}
+
 // func TestParseFile(t *testing.T) {
 // 	th, err := ParseFile("../testfiles/full.thrift")
 // 	if err != nil {
