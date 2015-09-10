@@ -40,6 +40,15 @@ func ifaceSliceToString(v interface{}) string {
 	}
 	return string(b)
 }
+
+// toStruct converts a union to a struct with all fields optional.
+func unionToStruct(u union) *Struct {
+	st := (*Struct)(u)
+	for _, f := range st.Fields {
+		f.Optional = true
+	}
+	return st
+}
 }
 
 Grammar ← __ statements:( Statement __ )* (EOF / SyntaxError) {
@@ -70,7 +79,7 @@ Grammar ← __ statements:( Statement __ )* (EOF / SyntaxError) {
 		case exception:
 			thrift.Exceptions[v.Name] = (*Struct)(v)
 		case union:
-			thrift.Unions[v.Name] = (*Struct)(v)
+			thrift.Unions[v.Name] = unionToStruct(v)
 		case *Service:
 			thrift.Services[v.Name] = v
 		case include:

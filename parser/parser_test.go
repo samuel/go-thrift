@@ -120,25 +120,28 @@ func TestServiceParsing(t *testing.T) {
 		Name: "myUnion",
 		Fields: []*Field{
 			{
-				ID:      1,
-				Name:    "dbl",
-				Default: 1.1,
+				ID:       1,
+				Name:     "dbl",
+				Default:  1.1,
+				Optional: true,
 				Type: &Type{
 					Name: "double",
 				},
 			},
 			{
-				ID:      2,
-				Name:    "str",
-				Default: "2",
+				ID:       2,
+				Name:     "str",
+				Default:  "2",
+				Optional: true,
 				Type: &Type{
 					Name: "string",
 				},
 			},
 			{
-				ID:      3,
-				Name:    "int32",
-				Default: int64(3),
+				ID:       3,
+				Name:     "int32",
+				Default:  int64(3),
+				Optional: true,
 				Type: &Type{
 					Name: "i32",
 				},
