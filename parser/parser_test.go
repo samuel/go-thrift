@@ -30,6 +30,8 @@ func TestServiceParsing(t *testing.T) {
 			1: double dbl = 1.1;
 			2: string str = "2";
 			3: i32 int32 = 3;
+			4: i64 int64
+				= 5;
 		}
 
 		service ServiceNAME extends SomeBase {
@@ -144,6 +146,15 @@ func TestServiceParsing(t *testing.T) {
 				Optional: true,
 				Type: &Type{
 					Name: "i32",
+				},
+			},
+			{
+				ID:       4,
+				Name:     "int64",
+				Default:  int64(5),
+				Optional: true,
+				Type: &Type{
+					Name: "i64",
 				},
 			},
 		},
