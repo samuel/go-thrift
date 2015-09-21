@@ -309,7 +309,13 @@ func (g *GoGenerator) formatValue(v interface{}, t *parser.Type) (string, error)
 		buf.WriteString("\t}")
 		return buf.String(), nil
 	case parser.Identifier:
-		return string(v2), nil
+		parts := strings.SplitN(string(v2), ".", 2)
+		if len(parts) == 1 {
+			return camelCase(parts[0]), nil
+		}
+
+		resolved := parts[0] + camelCase(parts[1])
+		return resolved, nil
 	}
 	return "", fmt.Errorf("unsupported value type %T", v)
 }
@@ -612,11 +618,6 @@ func (g *GoGenerator) generateSingle(out io.Writer, thriftPath string, thrift *p
 			v, err := g.formatValue(c.Value, c.Type)
 			if err != nil {
 				g.error(err)
-			}
-			// If a constant value is an identifier, it must be to another constant
-			// which we format using camelCase.
-			if identifier, ok := c.Value.(parser.Identifier); ok {
-				v = camelCase(string(identifier))
 			}
 
 			if c.Type.Name == "list" || c.Type.Name == "map" || c.Type.Name == "set" {
