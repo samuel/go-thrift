@@ -192,7 +192,7 @@ func (g *GoGenerator) formatType(pkg string, thrift *parser.Thrift, typ *parser.
 		return ptr + name
 	}
 	if s := thrift.Structs[typ.Name]; s != nil {
-		name := s.Name
+		name := camelCase(s.Name)
 		if pkg != g.pkg {
 			name = pkg + "." + name
 		}
