@@ -26,6 +26,7 @@ var (
 	flagGoBinarystring = flag.Bool("go.binarystring", false, "Always use string for binary instead of []byte")
 	flagGoJsonEnumnum  = flag.Bool("go.json.enumnum", false, "For JSON marshal enums by number instead of name")
 	flagGoPointers     = flag.Bool("go.pointers", false, "Make all fields pointers")
+	flagGoImportPrefix = flag.String("go.importprefix", "", "Prefix for thrift-generated go package imports")
 )
 
 var (
@@ -590,6 +591,10 @@ func (g *GoGenerator) generateSingle(out io.Writer, thriftPath string, thrift *p
 		for _, path := range thrift.Includes {
 			pkg := g.Packages[path].Name
 			if pkg != packageName {
+				if *flagGoImportPrefix != "" {
+					pkg = filepath.Join(*flagGoImportPrefix, pkg)
+				}
+
 				imports = append(imports, pkg)
 			}
 		}
