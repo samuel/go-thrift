@@ -47,6 +47,9 @@ func (e *encoder) writeStruct(v reflect.Value) {
 		v = v.Elem()
 	}
 	if v.Kind() != reflect.Struct {
+		if !v.IsValid() {
+			e.error(&InvalidValueError{Value: v, Str: "expected a struct"})
+		}
 		e.error(&UnsupportedValueError{Value: v, Str: "expected a struct"})
 	}
 	if err := e.w.WriteStructBegin(v.Type().Name()); err != nil {

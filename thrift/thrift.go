@@ -96,6 +96,15 @@ func (e *UnsupportedValueError) Error() string {
 	return fmt.Sprintf("thrift: unsupported value (%+v): %s", e.Value, e.Str)
 }
 
+type InvalidValueError struct {
+	Value reflect.Value
+	Str   string
+}
+
+func (e *InvalidValueError) Error() string {
+	return fmt.Sprintf("thrift: invalid value (%+v): %s", e.Value, e.Str)
+}
+
 // ApplicationException is an application level thrift exception
 type ApplicationException struct {
 	Message string `thrift:"1"`
