@@ -16,6 +16,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -429,6 +430,22 @@ func (e *%s) UnmarshalJSON(b []byte) error {
 }
 `, enumName, enumName, enumName, enumName)
 
+	valueStrings := make([]string, 0, len(enum.Values))
+	for _, val := range enum.Values {
+		valueStrings = append(valueStrings, strconv.FormatInt(int64(val.Value), 10))
+	}
+	sort.Strings(valueStrings)
+	valueStringsName := strings.ToLower(enumName) + "Values"
+
+	g.write(out, `
+var %s = []int32{%s}
+
+func (e *%s) Generate(rand *rand.Rand, size int) reflect.Value {
+	v := %s(%s[rand.Intn(%d)])
+	return reflect.ValueOf(&v)
+}
+`, valueStringsName, strings.Join(valueStrings, ", "), enumName, enumName, valueStringsName, len(valueNames))
+
 	return nil
 }
 
@@ -629,7 +646,7 @@ func (g *GoGenerator) generateSingle(out io.Writer, thriftPath string, thrift *p
 	// Imports
 	imports := []string{"fmt"}
 	if len(thrift.Enums) > 0 {
-		imports = append(imports, "strconv")
+		imports = append(imports, "strconv", "math/rand", "reflect")
 	}
 	if len(thrift.Includes) > 0 {
 		for _, path := range thrift.Includes {
