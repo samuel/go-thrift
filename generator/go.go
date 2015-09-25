@@ -164,25 +164,21 @@ func (g *GoGenerator) formatType(pkg string, thrift *parser.Thrift, typ *parser.
 	case "double":
 		return ptr + "float64"
 	case "set":
-		valueType := g.formatType(pkg, thrift, typ.ValueType, false)
-		if valueType == "[]byte" {
-			valueType = "string"
-		}
-		return "map[" + valueType + "]struct{}"
+		keyType := g.formatKeyType(pkg, thrift, typ.KeyType)
+		return "map[" + keyType + "]struct{}"
 	case "list":
 		return "[]" + g.formatType(pkg, thrift, typ.ValueType, false)
 	case "map":
-		keyType := g.formatType(pkg, thrift, typ.KeyType, false)
-		if keyType == "[]byte" {
-			// TODO: Log, warn, do something!
-			// println("key type of []byte not supported for maps")
-			keyType = "string"
-		}
+		keyType := g.formatKeyType(pkg, thrift, typ.KeyType)
 		return "map[" + keyType + "]" + g.formatType(pkg, thrift, typ.ValueType, false)
 	}
 
 	if t := thrift.Typedefs[typ.Name]; t != nil {
-		return g.formatType(pkg, thrift, t, optional)
+		name := typ.Name
+		if pkg != g.pkg {
+			name = pkg + "." + name
+		}
+		return ptr + name
 	}
 	if e := thrift.Enums[typ.Name]; e != nil {
 		name := e.Name
@@ -215,6 +211,19 @@ func (g *GoGenerator) formatType(pkg string, thrift *parser.Thrift, typ *parser.
 
 	g.error(ErrUnknownType(typ.Name))
 	return ""
+}
+
+func (g *GoGenerator) formatKeyType(pkg string, thrift *parser.Thrift, typ *parser.Type) string {
+	keyType := g.formatType(pkg, thrift, typ, false)
+
+	// We can't use the []byte type as a map key.  Use string instead.
+	if t := thrift.Typedefs[typ.Name]; t != nil && t.Name == "binary" {
+		keyType = "string"
+	} else if keyType == "[]byte" {
+		keyType = "string"
+	}
+
+	return keyType
 }
 
 // Follow typedefs to the actual type
@@ -604,7 +613,13 @@ func (g *GoGenerator) generateSingle(out io.Writer, thriftPath string, thrift *p
 
 	g.write(out, "\nvar _ = fmt.Sprintf\n")
 
-	//
+	if len(thrift.Typedefs) > 0 {
+		g.write(out, "\n")
+		for _, k := range sortedKeys(thrift.Typedefs) {
+			t := thrift.Typedefs[k]
+			g.write(out, "type %s %s\n", camelCase(k), g.formatType(g.pkg, g.thrift, t, false))
+		}
+	}
 
 	if len(thrift.Constants) > 0 {
 		for _, k := range sortedKeys(thrift.Constants) {
