@@ -602,7 +602,7 @@ func (g *GoGenerator) generateSingle(out io.Writer, thriftPath string, thrift *p
 		g.write(out, ")\n")
 	}
 
-	g.write(out, "\nvar _ = fmt.Printf\n")
+	g.write(out, "\nvar _ = fmt.Sprintf\n")
 
 	//
 
