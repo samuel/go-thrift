@@ -41,6 +41,11 @@ func TestServiceParsing(t *testing.T) {
 			SUBTRACT = 2
 		}
 
+		enum NoNewLineBeforeBrace {
+			ADD = 1,
+			SUBTRACT = 2
+		}
+
 		service ServiceNAME extends SomeBase
 		{
 			# authenticate method
@@ -55,7 +60,14 @@ func TestServiceParsing(t *testing.T) {
 		struct SomeStruct {
 			1: double dbl = 1.2,
 			2: optional string abc
+		}
+
+		struct NewLineBeforeBrace
+		{
+			1: double dbl = 1.2,
+			2: optional string abc
 		}`)))
+
 	if err != nil {
 		t.Fatalf("Service parsing failed with error %s", err.Error())
 	}
