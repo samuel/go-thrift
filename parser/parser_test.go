@@ -26,7 +26,8 @@ func TestServiceParsing(t *testing.T) {
 		const string S2 = 'foo\'\tbar'
 		const list<i64> L = [1, 2, 3];
 
-		union myUnion {
+		union myUnion
+		{
 			1: double dbl = 1.1;
 			2: string str = "2";
 			3: i32 int32 = 3;
@@ -34,7 +35,14 @@ func TestServiceParsing(t *testing.T) {
 				= 5;
 		}
 
-		service ServiceNAME extends SomeBase {
+		enum Operation
+		{
+			ADD = 1,
+			SUBTRACT = 2
+		}
+
+		service ServiceNAME extends SomeBase
+		{
 			# authenticate method
 			// comment2
 			/* some other
@@ -163,6 +171,25 @@ func TestServiceParsing(t *testing.T) {
 		t.Errorf("myUnion missing")
 	} else if !reflect.DeepEqual(u, expectedUnion) {
 		t.Errorf("Expected\n%s\ngot\n%s", pprint(expectedUnion), pprint(u))
+	}
+
+	expectedEnum := &Enum{
+		Name: "Operation",
+		Values: map[string]*EnumValue{
+			"ADD": &EnumValue{
+				Name:  "ADD",
+				Value: 1,
+			},
+			"SUBTRACT": &EnumValue{
+				Name:  "SUBTRACT",
+				Value: 2,
+			},
+		},
+	}
+	if e := thrift.Enums["Operation"]; e == nil {
+		t.Errorf("enum Operation missing")
+	} else if !reflect.DeepEqual(e, expectedEnum) {
+		t.Errorf("Expected\n%s\ngot\n%s", pprint(expectedEnum), pprint(e))
 	}
 
 	if len(thrift.Services) != 1 {
