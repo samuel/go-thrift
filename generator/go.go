@@ -56,6 +56,7 @@ type GoGenerator struct {
 	ThriftFiles map[string]*parser.Thrift
 	Packages    map[string]GoPackage
 	Format      bool
+	Pointers    bool
 }
 
 var goKeywords = map[string]bool{
@@ -121,7 +122,18 @@ func (g *GoGenerator) write(w io.Writer, f string, a ...interface{}) error {
 	return nil
 }
 
-func (g *GoGenerator) formatType(pkg string, thrift *parser.Thrift, typ *parser.Type, optional bool) string {
+type typeOption int
+
+const (
+	toOptional typeOption = 1 << iota
+	toNoPointer
+)
+
+func (to typeOption) has(opt typeOption) bool {
+	return (to & opt) != 0
+}
+
+func (g *GoGenerator) formatType(pkg string, thrift *parser.Thrift, typ *parser.Type, opt typeOption) string {
 	// Follow includes
 	if strings.Contains(typ.Name, ".") {
 		// <include>.<type>
@@ -144,7 +156,7 @@ func (g *GoGenerator) formatType(pkg string, thrift *parser.Thrift, typ *parser.
 	}
 
 	ptr := ""
-	if *flagGoPointers || optional {
+	if !opt.has(toNoPointer) && (g.Pointers || opt.has(toOptional)) {
 		ptr = "*"
 	}
 	switch typ.Name {
@@ -167,10 +179,10 @@ func (g *GoGenerator) formatType(pkg string, thrift *parser.Thrift, typ *parser.
 		keyType := g.formatKeyType(pkg, thrift, typ.KeyType)
 		return "map[" + keyType + "]struct{}"
 	case "list":
-		return "[]" + g.formatType(pkg, thrift, typ.ValueType, false)
+		return "[]" + g.formatType(pkg, thrift, typ.ValueType, 0)
 	case "map":
 		keyType := g.formatKeyType(pkg, thrift, typ.KeyType)
-		return "map[" + keyType + "]" + g.formatType(pkg, thrift, typ.ValueType, false)
+		return "map[" + keyType + "]" + g.formatType(pkg, thrift, typ.ValueType, 0)
 	}
 
 	if t := thrift.Typedefs[typ.Name]; t != nil {
@@ -214,7 +226,7 @@ func (g *GoGenerator) formatType(pkg string, thrift *parser.Thrift, typ *parser.
 }
 
 func (g *GoGenerator) formatKeyType(pkg string, thrift *parser.Thrift, typ *parser.Type) string {
-	keyType := g.formatType(pkg, thrift, typ, false)
+	keyType := g.formatType(pkg, thrift, typ, 0)
 
 	// We can't use the []byte type as a map key.  Use string instead.
 	if t := thrift.Typedefs[typ.Name]; t != nil && t.Name == "binary" {
@@ -242,15 +254,23 @@ func (g *GoGenerator) formatField(field *parser.Field) string {
 	} else {
 		jsonTags = ",omitempty"
 	}
+	var opt typeOption
+	if field.Optional {
+		opt |= toOptional
+	}
 	return fmt.Sprintf(
 		"%s %s `thrift:\"%d%s\" json:\"%s%s\"`",
-		camelCase(field.Name), g.formatType(g.pkg, g.thrift, field.Type, field.Optional), field.ID, tags, field.Name, jsonTags)
+		camelCase(field.Name), g.formatType(g.pkg, g.thrift, field.Type, opt), field.ID, tags, field.Name, jsonTags)
 }
 
 func (g *GoGenerator) formatArguments(arguments []*parser.Field) string {
 	args := make([]string, len(arguments))
 	for i, arg := range arguments {
-		args[i] = fmt.Sprintf("%s %s", validGoIdent(lowerCamelCase(arg.Name)), g.formatType(g.pkg, g.thrift, arg.Type, arg.Optional))
+		var opt typeOption
+		if arg.Optional {
+			opt |= toOptional
+		}
+		args[i] = fmt.Sprintf("%s %s", validGoIdent(lowerCamelCase(arg.Name)), g.formatType(g.pkg, g.thrift, arg.Type, opt))
 	}
 	return strings.Join(args, ", ")
 }
@@ -263,9 +283,9 @@ func (g *GoGenerator) formatReturnType(typ *parser.Type, named bool) string {
 		return "error"
 	}
 	if named {
-		return fmt.Sprintf("(ret %s, err error)", g.formatType(g.pkg, g.thrift, typ, false))
+		return fmt.Sprintf("(ret %s, err error)", g.formatType(g.pkg, g.thrift, typ, 0))
 	}
-	return fmt.Sprintf("(%s, error)", g.formatType(g.pkg, g.thrift, typ, false))
+	return fmt.Sprintf("(%s, error)", g.formatType(g.pkg, g.thrift, typ, 0))
 }
 
 func (g *GoGenerator) formatValue(v interface{}, t *parser.Type) (string, error) {
@@ -280,7 +300,7 @@ func (g *GoGenerator) formatValue(v interface{}, t *parser.Type) (string, error)
 		return strconv.FormatFloat(v2, 'f', -1, 64), nil
 	case []interface{}:
 		buf := &bytes.Buffer{}
-		buf.WriteString(g.formatType(g.pkg, g.thrift, t, false))
+		buf.WriteString(g.formatType(g.pkg, g.thrift, t, 0))
 		buf.WriteString("{\n")
 		for _, v := range v2 {
 			buf.WriteString("\t\t")
@@ -298,7 +318,7 @@ func (g *GoGenerator) formatValue(v interface{}, t *parser.Type) (string, error)
 		return buf.String(), nil
 	case []parser.KeyValue:
 		buf := &bytes.Buffer{}
-		buf.WriteString(g.formatType(g.pkg, g.thrift, t, false))
+		buf.WriteString(g.formatType(g.pkg, g.thrift, t, 0))
 		buf.WriteString("{\n")
 		for _, kv := range v2 {
 			buf.WriteString("\t\t")
@@ -482,12 +502,12 @@ func (g *GoGenerator) writeService(out io.Writer, svc *parser.Service) error {
 		if len(method.Exceptions) > 0 {
 			g.write(out, "\tswitch e := err.(type) {\n")
 			for _, ex := range method.Exceptions {
-				g.write(out, "\tcase %s:\n\t\tres.%s = e\n\t\terr = nil\n", g.formatType(g.pkg, g.thrift, ex.Type, false), camelCase(ex.Name))
+				g.write(out, "\tcase %s:\n\t\tres.%s = e\n\t\terr = nil\n", g.formatType(g.pkg, g.thrift, ex.Type, 0), camelCase(ex.Name))
 			}
 			g.write(out, "\t}\n")
 		}
 		if !isVoid {
-			if !*flagGoPointers && basicTypes[g.resolveType(method.ReturnType)] {
+			if !g.Pointers && basicTypes[g.resolveType(method.ReturnType)] {
 				g.write(out, "\tres.Value = &val\n")
 			} else {
 				g.write(out, "\tres.Value = val\n")
@@ -569,7 +589,7 @@ func (g *GoGenerator) writeService(out io.Writer, svc *parser.Service) error {
 		}
 
 		if method.ReturnType != nil && method.ReturnType.Name != "void" {
-			if !*flagGoPointers && basicTypes[g.resolveType(method.ReturnType)] {
+			if !g.Pointers && basicTypes[g.resolveType(method.ReturnType)] {
 				g.write(out, "\tif err == nil && res.Value != nil {\n\t ret = *res.Value\n}\n")
 			} else {
 				g.write(out, "\tif err == nil {\n\tret = res.Value\n}\n")
@@ -617,7 +637,7 @@ func (g *GoGenerator) generateSingle(out io.Writer, thriftPath string, thrift *p
 		g.write(out, "\n")
 		for _, k := range sortedKeys(thrift.Typedefs) {
 			t := thrift.Typedefs[k]
-			g.write(out, "type %s %s\n", camelCase(k), g.formatType(g.pkg, g.thrift, t, false))
+			g.write(out, "type %s %s\n", camelCase(k), g.formatType(g.pkg, g.thrift, t, toNoPointer))
 		}
 	}
 
