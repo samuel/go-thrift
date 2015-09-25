@@ -39,12 +39,12 @@ func lowerCamelCase(st string) string {
 // prepended to the string.
 func validIdentifier(st string, replace string) string {
 	var (
-		invalid_rune  = regexp.MustCompile("[^\\pL\\pN_]")
-		invalid_start = regexp.MustCompile("^\\pN")
-		out           string
+		invalidRune  = regexp.MustCompile("[^\\pL\\pN_]")
+		invalidStart = regexp.MustCompile("^\\pN")
+		out          string
 	)
-	out = invalid_rune.ReplaceAllString(st, "_")
-	if invalid_start.MatchString(out) {
+	out = invalidRune.ReplaceAllString(st, "_")
+	if invalidStart.MatchString(out) {
 		out = fmt.Sprintf("%v%v", replace, out)
 	}
 	return out

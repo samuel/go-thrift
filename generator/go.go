@@ -24,7 +24,7 @@ import (
 
 var (
 	flagGoBinarystring = flag.Bool("go.binarystring", false, "Always use string for binary instead of []byte")
-	flagGoJsonEnumnum  = flag.Bool("go.json.enumnum", false, "For JSON marshal enums by number instead of name")
+	flagGoJSONEnumnum  = flag.Bool("go.json.enumnum", false, "For JSON marshal enums by number instead of name")
 	flagGoPointers     = flag.Bool("go.pointers", false, "Make all fields pointers")
 )
 
@@ -182,7 +182,7 @@ func (g *GoGenerator) formatType(pkg string, thrift *parser.Thrift, typ *parser.
 		return "[]" + g.formatType(pkg, thrift, typ.ValueType, 0)
 	case "map":
 		keyType := g.formatKeyType(pkg, thrift, typ.KeyType)
-		return "map[" + keyType + "]" + g.formatType(pkg, thrift, typ.ValueType, 0)
+		return "map[" + keyType + "]" + g.formatType(pkg, thrift, typ.ValueType, toNoPointer)
 	}
 
 	if t := thrift.Typedefs[typ.Name]; t != nil {
@@ -226,7 +226,7 @@ func (g *GoGenerator) formatType(pkg string, thrift *parser.Thrift, typ *parser.
 }
 
 func (g *GoGenerator) formatKeyType(pkg string, thrift *parser.Thrift, typ *parser.Type) string {
-	keyType := g.formatType(pkg, thrift, typ, 0)
+	keyType := g.formatType(pkg, thrift, typ, toNoPointer)
 
 	// We can't use the []byte type as a map key.  Use string instead.
 	if t := thrift.Typedefs[typ.Name]; t != nil && t.Name == "binary" {
@@ -396,7 +396,7 @@ func (e %s) String() string {
 }
 `, enumName, enumName, enumName)
 
-	if !*flagGoJsonEnumnum {
+	if !*flagGoJSONEnumnum {
 		g.write(out, `
 func (e %s) MarshalJSON() ([]byte, error) {
 	name := %sByValue[e]
@@ -494,7 +494,7 @@ func (g *GoGenerator) writeService(out io.Writer, svc *parser.Service) error {
 			resArg = fmt.Sprintf(", res *%s%sResponse", svcName, mName)
 		}
 		g.write(out, "\nfunc (s *%sServer) %s(req *%s%sRequest%s) error {\n", svcName, mName, svcName, mName, resArg)
-		args := make([]string, 0)
+		var args []string
 		for _, arg := range method.Arguments {
 			aName := camelCase(arg.Name)
 			args = append(args, "req."+aName)
