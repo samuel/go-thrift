@@ -4,8 +4,6 @@ package gentest
 
 import (
 	"fmt"
-	"math/rand"
-	"reflect"
 	"strconv"
 )
 
@@ -54,13 +52,6 @@ func (e *ResultCode) UnmarshalJSON(b []byte) error {
 	i, err := strconv.Atoi(st)
 	*e = ResultCode(i)
 	return err
-}
-
-var resultcodeValues = []int32{0, 1}
-
-func (e *ResultCode) Generate(rand *rand.Rand, size int) reflect.Value {
-	v := ResultCode(resultcodeValues[rand.Intn(2)])
-	return reflect.ValueOf(&v)
 }
 
 type LogEntry struct {

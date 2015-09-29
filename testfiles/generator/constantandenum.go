@@ -4,8 +4,6 @@ package gentest
 
 import (
 	"fmt"
-	"math/rand"
-	"reflect"
 	"strconv"
 )
 
@@ -61,11 +59,4 @@ func (e *MyEnum) UnmarshalJSON(b []byte) error {
 	i, err := strconv.Atoi(st)
 	*e = MyEnum(i)
 	return err
-}
-
-var myenumValues = []int32{1, 2}
-
-func (e *MyEnum) Generate(rand *rand.Rand, size int) reflect.Value {
-	v := MyEnum(myenumValues[rand.Intn(2)])
-	return reflect.ValueOf(&v)
 }

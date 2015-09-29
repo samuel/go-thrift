@@ -24,11 +24,12 @@ import (
 )
 
 var (
-	flagGoBinarystring = flag.Bool("go.binarystring", false, "Always use string for binary instead of []byte")
-	flagGoImportPrefix = flag.String("go.importprefix", "", "Prefix for Thrift-generated go package imports")
-	flagGoJSONEnumnum  = flag.Bool("go.json.enumnum", false, "For JSON marshal enums by number instead of name")
-	flagGoPointers     = flag.Bool("go.pointers", false, "Make all fields pointers")
-	flagGoSignedBytes  = flag.Bool("go.signedbytes", false, "Interpret Thrift byte as Go signed int8 type")
+	flagGoBinarystring    = flag.Bool("go.binarystring", false, "Always use string for binary instead of []byte")
+	flagGoJSONEnumnum     = flag.Bool("go.json.enumnum", false, "For JSON marshal enums by number instead of name")
+	flagGoPointers        = flag.Bool("go.pointers", false, "Make all fields pointers")
+	flagGoImportPrefix    = flag.String("go.importprefix", "", "Prefix for thrift-generated go package imports")
+	flagGoGenerateMethods = flag.Bool("go.generate", false, "Add testing/quick compatible Generate methods to enum types")
+	flagGoSignedBytes     = flag.Bool("go.signedbytes", false, "Interpret Thrift byte as Go signed int8 type")
 )
 
 var (
@@ -430,14 +431,15 @@ func (e *%s) UnmarshalJSON(b []byte) error {
 }
 `, enumName, enumName, enumName, enumName)
 
-	valueStrings := make([]string, 0, len(enum.Values))
-	for _, val := range enum.Values {
-		valueStrings = append(valueStrings, strconv.FormatInt(int64(val.Value), 10))
-	}
-	sort.Strings(valueStrings)
-	valueStringsName := strings.ToLower(enumName) + "Values"
+	if *flagGoGenerateMethods {
+		valueStrings := make([]string, 0, len(enum.Values))
+		for _, val := range enum.Values {
+			valueStrings = append(valueStrings, strconv.FormatInt(int64(val.Value), 10))
+		}
+		sort.Strings(valueStrings)
+		valueStringsName := strings.ToLower(enumName) + "Values"
 
-	g.write(out, `
+		g.write(out, `
 var %s = []int32{%s}
 
 func (e *%s) Generate(rand *rand.Rand, size int) reflect.Value {
@@ -445,6 +447,7 @@ func (e *%s) Generate(rand *rand.Rand, size int) reflect.Value {
 	return reflect.ValueOf(&v)
 }
 `, valueStringsName, strings.Join(valueStrings, ", "), enumName, enumName, valueStringsName, len(valueNames))
+	}
 
 	return nil
 }
@@ -646,7 +649,11 @@ func (g *GoGenerator) generateSingle(out io.Writer, thriftPath string, thrift *p
 	// Imports
 	imports := []string{"fmt"}
 	if len(thrift.Enums) > 0 {
-		imports = append(imports, "strconv", "math/rand", "reflect")
+		imports = append(imports, "strconv")
+
+		if *flagGoGenerateMethods {
+			imports = append(imports, "math/rand", "reflect")
+		}
 	}
 	if len(thrift.Includes) > 0 {
 		for _, path := range thrift.Includes {
