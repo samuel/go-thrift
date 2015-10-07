@@ -177,8 +177,8 @@ func (g *GoGenerator) formatType(pkg string, thrift *parser.Thrift, typ *parser.
 	case "double":
 		return ptr + "float64"
 	case "set":
-		keyType := g.formatKeyType(pkg, thrift, typ.KeyType)
-		return "map[" + keyType + "]struct{}"
+		valueType := g.formatKeyType(pkg, thrift, typ.ValueType)
+		return "map[" + valueType + "]struct{}"
 	case "list":
 		return "[]" + g.formatType(pkg, thrift, typ.ValueType, 0)
 	case "map":
