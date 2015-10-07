@@ -52,7 +52,10 @@ func (e *encoder) writeStruct(v reflect.Value) {
 	if err := e.w.WriteStructBegin(v.Type().Name()); err != nil {
 		e.error(err)
 	}
-	for _, ef := range encodeFields(v.Type()).fields {
+
+	mf := encodeFields(v.Type())
+	for _, fid := range mf.orderedIds {
+		ef := mf.fields[fid]
 		structField := v.Type().Field(ef.i)
 		fieldValue := v.Field(ef.i)
 

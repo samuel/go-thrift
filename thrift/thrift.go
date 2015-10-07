@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"sort"
 	"sync"
 )
 
@@ -191,8 +192,9 @@ type encodeField struct {
 }
 
 type structMeta struct {
-	required uint64 // bitmap of required fields
-	fields   map[int]encodeField
+	required   uint64 // bitmap of required fields
+	orderedIds []int
+	fields     map[int]encodeField
 }
 
 var (
@@ -261,6 +263,13 @@ func encodeFields(t reflect.Type) structMeta {
 			fs[ef.id] = ef
 		}
 	}
+
+	m.orderedIds = make([]int, 0, len(m.fields))
+	for idx := range m.fields {
+		m.orderedIds = append(m.orderedIds, idx)
+	}
+	sort.Ints(m.orderedIds)
+
 	encodeFieldsCache[t] = m
 	return m
 }
