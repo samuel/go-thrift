@@ -8,7 +8,7 @@ import (
 
 var _ = fmt.Sprintf
 
-type St struct {
+type StSet struct {
 	StringSet map[string]struct{} `thrift:"1,required" json:"string_set"`
 	I32Set    map[int32]struct{}  `thrift:"2,required" json:"i32_set"`
 	BinarySet map[string]struct{} `thrift:"3,required" json:"binary_set"`
