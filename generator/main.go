@@ -89,6 +89,7 @@ func main() {
 	generator := &GoGenerator{
 		ThriftFiles: parsedThrift,
 		Format:      true,
+		Pointers:    *flagGoPointers,
 	}
 	err = generator.Generate(outpath)
 	if err != nil {
