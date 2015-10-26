@@ -234,7 +234,7 @@ func encodeFields(t reflect.Type) structMeta {
 	n := v.NumField()
 	for i := 0; i < n; i++ {
 		f := t.Field(i)
-		if f.PkgPath != "" {
+		if f.PkgPath != "" && !f.Anonymous {
 			continue
 		}
 		if f.Anonymous {
