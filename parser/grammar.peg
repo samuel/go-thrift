@@ -300,7 +300,15 @@ CppType ← "cpp_type" cppType:Literal {
 	return cppType, nil
 }
 
-ConstValue ← Literal / DoubleConstant / IntConstant / ConstMap / ConstList / Identifier
+ConstValue ← Literal / DoubleConstant / HexConstant / IntConstant / ConstMap / ConstList / Identifier
+
+HexConstant ← sign:[-+]? "0x" value:Hex+ {
+	hex := ifaceSliceToString(value)
+	if sign != nil {
+		hex = string(sign.([]byte)) + hex
+	}
+	return strconv.ParseInt(hex, 16, 64)
+}
 
 IntConstant ← [-+]? Digit+ {
 	return strconv.ParseInt(string(c.text), 10, 64)
@@ -349,6 +357,7 @@ Identifier ← (Letter / '_')+ (Letter / Digit / [._])* {
 ListSeparator ← [,;]
 Letter ← [A-Za-z]
 Digit ← [0-9]
+Hex ← [0-9A-Fa-f]
 
 //
 

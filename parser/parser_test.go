@@ -89,12 +89,12 @@ func TestServiceParsing(t *testing.T) {
 	if c := thrift.Constants["S1"]; c == nil {
 		t.Errorf("S1 constant missing")
 	} else if v, e := c.Value.(string), "foo\"\tbar"; e != v {
-		t.Errorf("Excepted %s for constnat S1, got %s", strconv.Quote(e), strconv.Quote(v))
+		t.Errorf("Excepted %s for constant S1, got %s", strconv.Quote(e), strconv.Quote(v))
 	}
 	if c := thrift.Constants["S2"]; c == nil {
 		t.Errorf("S2 constant missing")
 	} else if v, e := c.Value.(string), "foo'\tbar"; e != v {
-		t.Errorf("Excepted %s for constnat S2, got %s", strconv.Quote(e), strconv.Quote(v))
+		t.Errorf("Excepted %s for constant S2, got %s", strconv.Quote(e), strconv.Quote(v))
 	}
 
 	expConst := &Constant{
@@ -266,9 +266,11 @@ func TestParseConstant(t *testing.T) {
 	thrift, err := parser.Parse(bytes.NewBuffer([]byte(`
 		const string C1 = "test"
 		const string C2 = C1
+		const i64 H1 = 0x2603
+		const i64 H2 = -0xC9
 		`)))
 	if err != nil {
-		t.Fatalf("Service parsing failed with error %s", err.Error())
+		t.Fatalf("Constant parsing failed with error %s", err.Error())
 	}
 
 	expected := map[string]*Constant{
@@ -281,6 +283,16 @@ func TestParseConstant(t *testing.T) {
 			Name:  "C2",
 			Type:  &Type{Name: "string"},
 			Value: Identifier("C1"),
+		},
+		"H1": &Constant{
+			Name:  "H1",
+			Type:  &Type{Name: "i64"},
+			Value: int64(9731),
+		},
+		"H2": &Constant{
+			Name:  "H2",
+			Type:  &Type{Name: "i64"},
+			Value: int64(-201),
 		},
 	}
 	if got := thrift.Constants; !reflect.DeepEqual(expected, got) {
