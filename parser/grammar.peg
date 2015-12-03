@@ -83,7 +83,7 @@ Grammar ← __ statements:( Statement __ )* (EOF / SyntaxError) {
 		case *Service:
 			thrift.Services[v.Name] = v
 		case include:
-			name := string(v)
+			name := filepath.Base(string(v))
 			if ix := strings.LastIndex(name, "."); ix > 0 {
 				name = name[:ix]
 			}
@@ -112,7 +112,7 @@ Namespace ← "namespace" _ scope:[a-z.-]+ _ ns:Identifier EOS {
 	}, nil
 }
 
-Const ← "const" _ typ:FieldType _ name:Identifier _ "=" _ value:ConstValue EOS {
+Const ← "const" _ typ:FieldType _ name:Identifier __ "=" __ value:ConstValue EOS {
 	return &Constant{
 		Name: string(name.(Identifier)),
 		Type: typ.(*Type),
@@ -274,7 +274,7 @@ ContainerType ← typ:(MapType / SetType / ListType) {
 	return typ, nil
 }
 
-MapType ← CppType? "map<" WS key:FieldType WS "," WS value:FieldType WS ">" {
+MapType ← CppType? "map" WS "<" WS key:FieldType WS "," WS value:FieldType WS ">" {
 	return &Type{
 		Name: "map",
 		KeyType: key.(*Type),
@@ -282,14 +282,14 @@ MapType ← CppType? "map<" WS key:FieldType WS "," WS value:FieldType WS ">" {
 	}, nil
 }
 
-SetType ← CppType? "set<" WS typ:FieldType WS ">" {
+SetType ← CppType? "set" WS "<" WS typ:FieldType WS ">" {
 	return &Type{
 		Name: "set",
 		ValueType: typ.(*Type),
 	}, nil
 }
 
-ListType ← "list<" WS typ:FieldType WS ">" {
+ListType ← "list" WS "<" WS typ:FieldType WS ">" {
 	return &Type{
 		Name: "list",
 		ValueType: typ.(*Type),

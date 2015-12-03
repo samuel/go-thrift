@@ -28,7 +28,11 @@ func (p *Parser) Parse(r io.Reader, opts ...Option) (*Thrift, error) {
 	if err != nil {
 		return nil, err
 	}
-	t, err := Parse("<reader>", b, opts...)
+	name := "<reader>"
+	if named, ok := r.(namedReader); ok {
+		name = named.Name()
+	}
+	t, err := Parse(name, b, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -70,6 +74,7 @@ func (p *Parser) ParseFile(filename string) (map[string]*Thrift, string, error) 
 			for _, incPath := range th.Includes {
 				if files[incPath] == nil {
 					path = incPath
+					basePath = filepath.Dir(path)
 					break
 				}
 			}
@@ -95,4 +100,8 @@ func (p *Parser) abs(path string) (string, error) {
 		return filepath.Clean(absPath), nil
 	}
 	return p.Filesystem.Abs(path)
+}
+
+type namedReader interface {
+	Name() string
 }
