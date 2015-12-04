@@ -46,7 +46,6 @@ func (p *Parser) ParseFile(filename string) (map[string]*Thrift, string, error) 
 	if err != nil {
 		return nil, "", err
 	}
-	basePath := filepath.Dir(absPath)
 
 	path := absPath
 	for path != "" {
@@ -60,6 +59,7 @@ func (p *Parser) ParseFile(filename string) (map[string]*Thrift, string, error) 
 		}
 		files[path] = thrift
 
+		basePath := filepath.Dir(path)
 		for incName, incPath := range thrift.Includes {
 			p, err := p.abs(filepath.Join(basePath, incPath))
 			if err != nil {
@@ -74,7 +74,6 @@ func (p *Parser) ParseFile(filename string) (map[string]*Thrift, string, error) 
 			for _, incPath := range th.Includes {
 				if files[incPath] == nil {
 					path = incPath
-					basePath = filepath.Dir(path)
 					break
 				}
 			}
