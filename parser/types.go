@@ -53,18 +53,20 @@ type Struct struct {
 }
 
 type Method struct {
-	Comment    string
-	Name       string
-	Oneway     bool
-	ReturnType *Type
-	Arguments  []*Field
-	Exceptions []*Field
+	Comment     string
+	Name        string
+	Oneway      bool
+	ReturnType  *Type
+	Arguments   []*Field
+	Exceptions  []*Field
+	Annotations []*Annotation
 }
 
 type Service struct {
-	Name    string
-	Extends string
-	Methods map[string]*Method
+	Name        string
+	Extends     string
+	Methods     map[string]*Method
+	Annotations []*Annotation
 }
 
 type Thrift struct {

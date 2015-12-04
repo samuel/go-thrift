@@ -423,6 +423,40 @@ func TestStructLikeAnnotations(t *testing.T) {
 	}
 }
 
+func TestParseServiceAnnotations(t *testing.T) {
+	thrift, err := parse(`
+		service S {
+			void foo(1: i32 f1) (a1="v1")
+		} (a2 = "v2")
+	`)
+	if err != nil {
+		t.Fatalf("Parse service annotations failed: %v", err)
+	}
+
+	expected := map[string]*Service{
+		"S": &Service{
+			Name: "S",
+			Methods: map[string]*Method{
+				"foo": &Method{
+					Name: "foo",
+					Arguments: []*Field{
+						&Field{
+							ID:   1,
+							Name: "f1",
+							Type: &Type{Name: "i32"},
+						},
+					},
+					Annotations: []*Annotation{{"a1", "v1"}},
+				},
+			},
+			Annotations: []*Annotation{{"a2", "v2"}},
+		},
+	}
+	if got := thrift.Services; !reflect.DeepEqual(expected, got) {
+		t.Errorf("Unexpected annotation parsing got\n%s\n instead of\n%v", pprint(got), pprint(expected))
+	}
+}
+
 func TestParseConstant(t *testing.T) {
 	thrift, err := parse(`
 		const string C1 = "test"
