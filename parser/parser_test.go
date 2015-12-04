@@ -323,6 +323,46 @@ typedef set<string> (a1 = "v1") setT (a2="v2")
 	}
 }
 
+func TestParseEnumAnnotations(t *testing.T) {
+	thrift, err := parse(`
+		enum E {
+			ONE (a1="v1"),
+			TWO = 2 (a2 = "v2"),
+			THREE (a3 = "v3")
+		} (a4 = "v4")
+	`)
+	if err != nil {
+		t.Fatalf("Parse enum annotations failed: %v", err)
+	}
+
+	expected := map[string]*Enum{
+		"E": &Enum{
+			Name: "E",
+			Values: map[string]*EnumValue{
+				"ONE": &EnumValue{
+					Name:        "ONE",
+					Value:       0,
+					Annotations: []*Annotation{{"a1", "v1"}},
+				},
+				"TWO": &EnumValue{
+					Name:        "TWO",
+					Value:       2,
+					Annotations: []*Annotation{{"a2", "v2"}},
+				},
+				"THREE": &EnumValue{
+					Name:        "THREE",
+					Value:       3,
+					Annotations: []*Annotation{{"a3", "v3"}},
+				},
+			},
+			Annotations: []*Annotation{{"a4", "v4"}},
+		},
+	}
+	if got := thrift.Enums; !reflect.DeepEqual(expected, got) {
+		t.Errorf("Unexpected annotation parsing got\n%s\n instead of\n%v", pprint(got), pprint(thrift))
+	}
+}
+
 func TestParseConstant(t *testing.T) {
 	thrift, err := parse(`
 		const string C1 = "test"

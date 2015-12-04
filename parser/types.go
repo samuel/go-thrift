@@ -21,13 +21,15 @@ type Typedef struct {
 }
 
 type EnumValue struct {
-	Name  string
-	Value int
+	Name        string
+	Value       int
+	Annotations []*Annotation
 }
 
 type Enum struct {
-	Name   string
-	Values map[string]*EnumValue
+	Name        string
+	Values      map[string]*EnumValue
+	Annotations []*Annotation
 }
 
 type Constant struct {

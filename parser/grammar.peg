@@ -122,11 +122,12 @@ Const ← "const" _ typ:FieldType _ name:Identifier __ "=" __ value:ConstValue E
 	}, nil
 }
 
-Enum ← "enum" _ name:Identifier __ '{' __ values:(EnumValue __)* '}' EOS {
+Enum ← "enum" _ name:Identifier __ '{' __ values:(EnumValue __)* '}' __ annotations:TypeAnnotations? EOS {
 	vs := toIfaceSlice(values)
 	en := &Enum{
 		Name: string(name.(Identifier)),
 		Values: make(map[string]*EnumValue, len(vs)),
+		Annotations: toAnnotations(annotations),
 	}
 	// Assigns numbers in order. This will behave badly if some values are
 	// defined and other are not, but I think that's ok since that's a silly
@@ -145,10 +146,11 @@ Enum ← "enum" _ name:Identifier __ '{' __ values:(EnumValue __)* '}' EOS {
 	return en, nil
 }
 
-EnumValue ← name:Identifier _ value:('=' _ IntConstant)? TypeAnnotations? ListSeparator? {
+EnumValue ← name:Identifier _ value:('=' _ IntConstant)? __ annotations:TypeAnnotations? ListSeparator? {
 	ev := &EnumValue{
 		Name: string(name.(Identifier)),
 		Value: -1,
+		Annotations: toAnnotations(annotations),
 	}
 	if value != nil {
 		ev.Value = int(value.([]interface{})[2].(int64))
