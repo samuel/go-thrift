@@ -14,11 +14,6 @@ type namespace struct {
 	namespace string
 }
 
-type typeDef struct {
-	name string
-	typ *Type
-}
-
 type exception *Struct
 
 type union *Struct
@@ -49,13 +44,20 @@ func unionToStruct(u union) *Struct {
 	}
 	return st
 }
+
+func toAnnotations(v interface{}) []*Annotation {
+	if v == nil {
+		return nil
+	}
+	return v.([]*Annotation)
+}
 }
 
 Grammar ← __ statements:( Statement __ )* (EOF / SyntaxError) {
 	thrift := &Thrift{
 		Includes: make(map[string]string),
 		Namespaces: make(map[string]string),
-		Typedefs: make(map[string]*Type),
+		Typedefs: make(map[string]*Typedef),
 		Constants: make(map[string]*Constant),
 		Enums: make(map[string]*Enum),
 		Structs: make(map[string]*Struct),
@@ -72,8 +74,8 @@ Grammar ← __ statements:( Statement __ )* (EOF / SyntaxError) {
 			thrift.Constants[v.Name] = v
 		case *Enum:
 			thrift.Enums[v.Name] = v
-		case *typeDef:
-			thrift.Typedefs[v.name] = v.typ
+		case *Typedef:
+			thrift.Typedefs[v.Alias] = v
 		case *Struct:
 			thrift.Structs[v.Name] = v
 		case exception:
@@ -143,7 +145,7 @@ Enum ← "enum" _ name:Identifier __ '{' __ values:(EnumValue __)* '}' EOS {
 	return en, nil
 }
 
-EnumValue ← name:Identifier _ value:('=' _ IntConstant)? ListSeparator? {
+EnumValue ← name:Identifier _ value:('=' _ IntConstant)? TypeAnnotations? ListSeparator? {
 	ev := &EnumValue{
 		Name: string(name.(Identifier)),
 		Value: -1,
@@ -154,10 +156,11 @@ EnumValue ← name:Identifier _ value:('=' _ IntConstant)? ListSeparator? {
 	return ev, nil
 }
 
-TypeDef ← "typedef" _ typ:FieldType _ name:Identifier EOS {
-	return &typeDef{
-		name: string(name.(Identifier)),
-		typ: typ.(*Type),
+TypeDef ← "typedef" _ typ:FieldType _ name:Identifier _ annotations:TypeAnnotations? EOS {
+	return &Typedef{
+		Type: typ.(*Type),
+		Alias: string(name.(Identifier)),
+		Annotations: toAnnotations(annotations),
 	}, nil
 }
 
@@ -266,33 +269,43 @@ DefinitionType ← typ:(BaseType / ContainerType) {
 	return typ, nil
 }
 
-BaseType ← ("bool" / "byte" / "i16" / "i32" / "i64" / "double" / "string" / "binary" ) {
-	return &Type{Name: string(c.text)}, nil
+BaseType ← name:BaseTypeName __ annotations:TypeAnnotations? {
+	return &Type{
+		Name: name.(string),
+		Annotations: toAnnotations(annotations),
+	}, nil
+}
+
+BaseTypeName ← ("bool" / "byte" / "i16" / "i32" / "i64" / "double" / "string" / "binary" ) {
+	return string(c.text), nil
 }
 
 ContainerType ← typ:(MapType / SetType / ListType) {
 	return typ, nil
 }
 
-MapType ← CppType? "map" WS "<" WS key:FieldType WS "," WS value:FieldType WS ">" {
+MapType ← CppType? "map" WS "<" WS key:FieldType WS "," WS value:FieldType WS ">" __ annotations:TypeAnnotations? {
 	return &Type{
 		Name: "map",
 		KeyType: key.(*Type),
 		ValueType: value.(*Type),
+		Annotations: toAnnotations(annotations),
 	}, nil
 }
 
-SetType ← CppType? "set" WS "<" WS typ:FieldType WS ">" {
+SetType ← CppType? "set" WS "<" WS typ:FieldType WS ">" __ annotations:TypeAnnotations? {
 	return &Type{
 		Name: "set",
 		ValueType: typ.(*Type),
+		Annotations: toAnnotations(annotations),
 	}, nil
 }
 
-ListType ← "list" WS "<" WS typ:FieldType WS ">" {
+ListType ← "list" WS "<" WS typ:FieldType WS ">" __ annotations:TypeAnnotations? {
 	return &Type{
 		Name: "list",
 		ValueType: typ.(*Type),
+		Annotations: toAnnotations(annotations),
 	}, nil
 }
 
@@ -301,6 +314,25 @@ CppType ← "cpp_type" cppType:Literal {
 }
 
 ConstValue ← Literal / DoubleConstant / IntConstant / ConstMap / ConstList / Identifier
+
+TypeAnnotations ← '(' __ annotations:TypeAnnotation* ')' {
+	var anns []*Annotation
+	for _, ann := range annotations.([]interface{}) {
+		anns = append(anns, ann.(*Annotation))
+	}
+	return anns, nil
+}
+
+TypeAnnotation ← name:Identifier _ value:('=' __ value:Literal { return value, nil })? ListSeparator? __ {
+	var optValue string
+	if value != nil {
+		optValue = value.(string)
+	}
+	return &Annotation{
+	  Name: string(name.(Identifier)),
+		Value: optValue,
+	}, nil
+}
 
 IntConstant ← [-+]? Digit+ {
 	return strconv.ParseInt(string(c.text), 10, 64)

@@ -261,6 +261,70 @@ func TestServiceParsing(t *testing.T) {
 	}
 }
 
+func TestParseTypeAnnotations(t *testing.T) {
+	parser := &Parser{}
+	thrift, err := parser.Parse(bytes.NewBuffer([]byte(`
+typedef i64 (
+	ann1 = "a1",
+	ann2  =  "a2",
+	js.type = 'Long'
+) long (tAnn1="tv1")
+
+typedef list<string> (a1 = "v1") listT (a2="v2")
+typedef map<string,i64> (a1 = "v1") mapT (a2="v2")
+typedef set<string> (a1 = "v1") setT (a2="v2")
+`)))
+	if err != nil {
+		t.Fatalf("Parse annotations failed: %v", err)
+	}
+
+	expected := map[string]*Typedef{
+		"long": &Typedef{
+			Alias: "long",
+			Type: &Type{
+				Name: "i64",
+				Annotations: []*Annotation{
+					{"ann1", "a1"},
+					{"ann2", "a2"},
+					{"js.type", "Long"},
+				},
+			},
+			Annotations: []*Annotation{{"tAnn1", "tv1"}},
+		},
+		"listT": &Typedef{
+			Alias: "listT",
+			Type: &Type{
+				Name:        "list",
+				ValueType:   &Type{Name: "string"},
+				Annotations: []*Annotation{{"a1", "v1"}},
+			},
+			Annotations: []*Annotation{{"a2", "v2"}},
+		},
+		"mapT": &Typedef{
+			Alias: "mapT",
+			Type: &Type{
+				Name:        "map",
+				KeyType:     &Type{Name: "string"},
+				ValueType:   &Type{Name: "i64"},
+				Annotations: []*Annotation{{"a1", "v1"}},
+			},
+			Annotations: []*Annotation{{"a2", "v2"}},
+		},
+		"setT": &Typedef{
+			Alias: "setT",
+			Type: &Type{
+				Name:        "set",
+				ValueType:   &Type{Name: "string"},
+				Annotations: []*Annotation{{"a1", "v1"}},
+			},
+			Annotations: []*Annotation{{"a2", "v2"}},
+		},
+	}
+	if got := thrift.Typedefs; !reflect.DeepEqual(expected, got) {
+		t.Errorf("Unexpected annotation parsing got\n%s\n instead of\n%v", pprint(got), pprint(thrift))
+	}
+}
+
 func TestParseConstant(t *testing.T) {
 	parser := &Parser{}
 	thrift, err := parser.Parse(bytes.NewBuffer([]byte(`
@@ -284,7 +348,7 @@ func TestParseConstant(t *testing.T) {
 		},
 	}
 	if got := thrift.Constants; !reflect.DeepEqual(expected, got) {
-		t.Errorf("Unexpected constant parsing got\n%s\ninstead of\n%s", pprint(expected), pprint(got))
+		t.Errorf("Unexpected constant parsing got\n%s\ninstead of\n%s", pprint(got), pprint(expected))
 	}
 }
 

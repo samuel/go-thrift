@@ -7,9 +7,17 @@ package parser
 import "fmt"
 
 type Type struct {
-	Name      string
-	KeyType   *Type // If map
-	ValueType *Type // If map, list, or set
+	Name        string
+	KeyType     *Type // If map
+	ValueType   *Type // If map, list, or set
+	Annotations []*Annotation
+}
+
+type Typedef struct {
+	*Type
+
+	Alias       string
+	Annotations []*Annotation
 }
 
 type EnumValue struct {
@@ -58,7 +66,7 @@ type Service struct {
 
 type Thrift struct {
 	Includes   map[string]string // name -> unique identifier (absolute path generally)
-	Typedefs   map[string]*Type
+	Typedefs   map[string]*Typedef
 	Namespaces map[string]string
 	Constants  map[string]*Constant
 	Enums      map[string]*Enum
@@ -72,6 +80,11 @@ type Identifier string
 
 type KeyValue struct {
 	Key, Value interface{}
+}
+
+type Annotation struct {
+	Name  string
+	Value string
 }
 
 func (t *Type) String() string {

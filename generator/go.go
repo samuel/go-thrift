@@ -242,7 +242,7 @@ func (g *GoGenerator) formatKeyType(pkg string, thrift *parser.Thrift, typ *pars
 // Follow typedefs to the actual type
 func (g *GoGenerator) resolveType(typ *parser.Type) string {
 	if t := g.thrift.Typedefs[typ.Name]; t != nil {
-		return g.resolveType(t)
+		return g.resolveType(t.Type)
 	}
 	return typ.Name
 }
@@ -648,7 +648,7 @@ func (g *GoGenerator) generateSingle(out io.Writer, thriftPath string, thrift *p
 		g.write(out, "\n")
 		for _, k := range sortedKeys(thrift.Typedefs) {
 			t := thrift.Typedefs[k]
-			g.write(out, "type %s %s\n", camelCase(k), g.formatType(g.pkg, g.thrift, t, toNoPointer))
+			g.write(out, "type %s %s\n", camelCase(k), g.formatType(g.pkg, g.thrift, t.Type, toNoPointer))
 		}
 	}
 
