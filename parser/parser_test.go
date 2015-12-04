@@ -7,6 +7,7 @@ package parser
 import (
 	"bytes"
 	"encoding/json"
+	"path/filepath"
 	"reflect"
 	"strconv"
 	"testing"
@@ -288,17 +289,19 @@ func TestParseConstant(t *testing.T) {
 	}
 }
 
-// func TestParseFile(t *testing.T) {
-// 	th, err := ParseFile("../testfiles/full.thrift")
-// 	if err != nil {
-// 		t.Fatal(err)
-// 	}
-// 	b, err := json.MarshalIndent(th, "", "    ")
-// 	if err != nil {
-// 		t.Fatal(err)
-// 	}
-// 	_ = b
-// }
+func TestParseFiles(t *testing.T) {
+	files := []string{
+		"cassandra.thrift",
+		"Hbase.thrift",
+	}
+
+	for _, f := range files {
+		_, err := ParseFile(filepath.Join("../testfiles", f))
+		if err != nil {
+			t.Errorf("Failed to parse file %q: %v", f, err)
+		}
+	}
+}
 
 func pprint(v interface{}) string {
 	b, err := json.MarshalIndent(v, "", "    ")
