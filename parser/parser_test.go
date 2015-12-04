@@ -293,6 +293,7 @@ func TestParseFiles(t *testing.T) {
 	files := []string{
 		"cassandra.thrift",
 		"Hbase.thrift",
+		"include_test.thrift",
 	}
 
 	for _, f := range files {
