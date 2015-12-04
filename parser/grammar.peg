@@ -189,11 +189,12 @@ FieldList ← fields:(Field __)* {
 	return flds, nil
 }
 
-Field ← id:IntConstant _ ':' _ req:FieldReq? _ typ:FieldType _ name:Identifier __ def:('=' _ ConstValue)? ListSeparator? {
+Field ← id:IntConstant _ ':' _ req:FieldReq? _ typ:FieldType _ name:Identifier __ def:('=' _ ConstValue)? __ annotations:TypeAnnotations? ListSeparator? {
 	f := &Field{
 		ID       : int(id.(int64)),
 		Name     : string(name.(Identifier)),
 		Type     : typ.(*Type),
+		Annotations: toAnnotations(annotations),
 	}
 	if req != nil && !req.(bool) {
 		f.Optional = true

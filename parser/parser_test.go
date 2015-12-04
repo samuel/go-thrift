@@ -363,7 +363,37 @@ func TestParseEnumAnnotations(t *testing.T) {
 	}
 }
 
-func TestStructLikeAnnotations(t *testing.T) {
+func TestParseFieldAnnotations(t *testing.T) {
+	thrift, err := parse(`
+		struct S {
+			1: optional i32 f1 (a1 = "v1")
+		}
+	`)
+	if err != nil {
+		t.Fatalf("Parse struct like annotations failed: %v", err)
+	}
+
+	expected := map[string]*Struct{
+		"S": &Struct{
+			Name: "S",
+			Fields: []*Field{
+				&Field{
+					ID:          1,
+					Name:        "f1",
+					Optional:    true,
+					Type:        &Type{Name: "i32"},
+					Annotations: []*Annotation{{"a1", "v1"}},
+				},
+			},
+		},
+	}
+
+	if got := thrift.Structs; !reflect.DeepEqual(expected, got) {
+		t.Errorf("Unexpected annotation parsing got\n%s\n instead of\n%v", pprint(got), pprint(expected))
+	}
+}
+
+func TestParseStructLikeAnnotations(t *testing.T) {
 	thrift, err := parse(`
 		struct S {
 			1: optional i32 f1

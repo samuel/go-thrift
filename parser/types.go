@@ -39,11 +39,12 @@ type Constant struct {
 }
 
 type Field struct {
-	ID       int
-	Name     string
-	Optional bool
-	Type     *Type
-	Default  interface{}
+	ID          int
+	Name        string
+	Optional    bool
+	Type        *Type
+	Default     interface{}
+	Annotations []*Annotation
 }
 
 type Struct struct {
