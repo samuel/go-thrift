@@ -47,8 +47,9 @@ type Field struct {
 }
 
 type Struct struct {
-	Name   string
-	Fields []*Field
+	Name        string
+	Fields      []*Field
+	Annotations []*Annotation
 }
 
 type Method struct {

@@ -319,7 +319,7 @@ typedef set<string> (a1 = "v1") setT (a2="v2")
 		},
 	}
 	if got := thrift.Typedefs; !reflect.DeepEqual(expected, got) {
-		t.Errorf("Unexpected annotation parsing got\n%s\n instead of\n%v", pprint(got), pprint(thrift))
+		t.Errorf("Unexpected annotation parsing got\n%s\n instead of\n%v", pprint(got), pprint(expected))
 	}
 }
 
@@ -359,7 +359,67 @@ func TestParseEnumAnnotations(t *testing.T) {
 		},
 	}
 	if got := thrift.Enums; !reflect.DeepEqual(expected, got) {
-		t.Errorf("Unexpected annotation parsing got\n%s\n instead of\n%v", pprint(got), pprint(thrift))
+		t.Errorf("Unexpected annotation parsing got\n%s\n instead of\n%v", pprint(got), pprint(expected))
+	}
+}
+
+func TestStructLikeAnnotations(t *testing.T) {
+	thrift, err := parse(`
+		struct S {
+			1: optional i32 f1
+			2: optional string f2
+		} (a1 = "v1")
+		union U {
+			1: optional i32 f1
+			2: optional string f2
+		} (a2 = "v2")
+		exception E {
+			1: optional i32 f1
+			2: optional string f2
+		} (a3 = "v3")
+	`)
+	if err != nil {
+		t.Fatalf("Parse struct like annotations failed: %v", err)
+	}
+
+	expected, _ := parse("")
+	fields := []*Field{
+		&Field{
+			ID:       1,
+			Name:     "f1",
+			Optional: true,
+			Type:     &Type{Name: "i32"},
+		},
+		&Field{
+			ID:       2,
+			Name:     "f2",
+			Optional: true,
+			Type:     &Type{Name: "string"},
+		},
+	}
+	expected.Structs = map[string]*Struct{
+		"S": &Struct{
+			Name:        "S",
+			Fields:      fields,
+			Annotations: []*Annotation{{"a1", "v1"}},
+		},
+	}
+	expected.Unions = map[string]*Struct{
+		"U": &Struct{
+			Name:        "U",
+			Fields:      fields,
+			Annotations: []*Annotation{{"a2", "v2"}},
+		},
+	}
+	expected.Exceptions = map[string]*Struct{
+		"E": &Struct{
+			Name:        "E",
+			Fields:      fields,
+			Annotations: []*Annotation{{"a3", "v3"}},
+		},
+	}
+	if !reflect.DeepEqual(expected, thrift) {
+		t.Errorf("Unexpected annotation parsing got\n%s\n instead of\n%v", pprint(thrift), pprint(expected))
 	}
 }
 
