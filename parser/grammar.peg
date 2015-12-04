@@ -122,7 +122,7 @@ Const ← "const" _ typ:FieldType _ name:Identifier __ "=" __ value:ConstValue E
 	}, nil
 }
 
-Enum ← "enum" _ name:Identifier __ '{' __ values:(EnumValue __)* '}' __ annotations:TypeAnnotations? EOS {
+Enum ← "enum" _ name:Identifier __ '{' __ values:(EnumValue __)* '}' _ annotations:TypeAnnotations? EOS {
 	vs := toIfaceSlice(values)
 	en := &Enum{
 		Name: string(name.(Identifier)),
@@ -146,7 +146,7 @@ Enum ← "enum" _ name:Identifier __ '{' __ values:(EnumValue __)* '}' __ annota
 	return en, nil
 }
 
-EnumValue ← name:Identifier _ value:('=' _ IntConstant)? __ annotations:TypeAnnotations? ListSeparator? {
+EnumValue ← name:Identifier _ value:('=' _ IntConstant)? _ annotations:TypeAnnotations? ListSeparator? {
 	ev := &EnumValue{
 		Name: string(name.(Identifier)),
 		Value: -1,
@@ -169,7 +169,7 @@ TypeDef ← "typedef" _ typ:FieldType _ name:Identifier _ annotations:TypeAnnota
 Struct ← "struct" _ st:StructLike { return st.(*Struct), nil }
 Exception ← "exception" _ st:StructLike { return exception(st.(*Struct)), nil }
 Union ← "union" _ st:StructLike { return union(st.(*Struct)), nil }
-StructLike ← name:Identifier __ '{' __ fields:FieldList '}' __ annotations:TypeAnnotations? EOS {
+StructLike ← name:Identifier __ '{' __ fields:FieldList '}' _ annotations:TypeAnnotations? EOS {
 	st := &Struct{
 		Name: string(name.(Identifier)),
 		Annotations: toAnnotations(annotations),
@@ -189,7 +189,7 @@ FieldList ← fields:(Field __)* {
 	return flds, nil
 }
 
-Field ← id:IntConstant _ ':' _ req:FieldReq? _ typ:FieldType _ name:Identifier __ def:('=' _ ConstValue)? __ annotations:TypeAnnotations? ListSeparator? {
+Field ← id:IntConstant _ ':' _ req:FieldReq? _ typ:FieldType _ name:Identifier __ def:('=' _ ConstValue)? _ annotations:TypeAnnotations? ListSeparator? {
 	f := &Field{
 		ID       : int(id.(int64)),
 		Name     : string(name.(Identifier)),
@@ -209,7 +209,7 @@ FieldReq ← ("required" / "optional") {
 	return !bytes.Equal(c.text, []byte("optional")), nil
 }
 
-Service ← "service" _ name:Identifier _ extends:("extends" __ Identifier __)? __ '{' __ methods:(Function __)* ('}' / EndOfServiceError) __ annotations:TypeAnnotations?  EOS {
+Service ← "service" _ name:Identifier _ extends:("extends" __ Identifier __)? __ '{' __ methods:(Function __)* ('}' / EndOfServiceError) _ annotations:TypeAnnotations?  EOS {
 	ms := methods.([]interface{})
 	svc := &Service{
 		Name: string(name.(Identifier)),
@@ -229,7 +229,7 @@ EndOfServiceError ← . {
 	return nil, errors.New("parser: expected end of service")
 }
 
-Function ← oneway:("oneway" __)? typ:FunctionType __ name:Identifier _ '(' __ arguments:FieldList ')' __ exceptions:Throws? __ annotations:TypeAnnotations? ListSeparator? {
+Function ← oneway:("oneway" __)? typ:FunctionType __ name:Identifier _ '(' __ arguments:FieldList ')' __ exceptions:Throws? _ annotations:TypeAnnotations? ListSeparator? {
 	m := &Method{
 		Name: string(name.(Identifier)),
 		Annotations: toAnnotations(annotations),
@@ -275,7 +275,7 @@ DefinitionType ← typ:(BaseType / ContainerType) {
 	return typ, nil
 }
 
-BaseType ← name:BaseTypeName __ annotations:TypeAnnotations? {
+BaseType ← name:BaseTypeName _ annotations:TypeAnnotations? {
 	return &Type{
 		Name: name.(string),
 		Annotations: toAnnotations(annotations),
@@ -290,7 +290,7 @@ ContainerType ← typ:(MapType / SetType / ListType) {
 	return typ, nil
 }
 
-MapType ← CppType? "map" WS "<" WS key:FieldType WS "," WS value:FieldType WS ">" __ annotations:TypeAnnotations? {
+MapType ← CppType? "map" WS "<" WS key:FieldType WS "," WS value:FieldType WS ">" _ annotations:TypeAnnotations? {
 	return &Type{
 		Name: "map",
 		KeyType: key.(*Type),
@@ -299,7 +299,7 @@ MapType ← CppType? "map" WS "<" WS key:FieldType WS "," WS value:FieldType WS 
 	}, nil
 }
 
-SetType ← CppType? "set" WS "<" WS typ:FieldType WS ">" __ annotations:TypeAnnotations? {
+SetType ← CppType? "set" WS "<" WS typ:FieldType WS ">" _ annotations:TypeAnnotations? {
 	return &Type{
 		Name: "set",
 		ValueType: typ.(*Type),
@@ -307,7 +307,7 @@ SetType ← CppType? "set" WS "<" WS typ:FieldType WS ">" __ annotations:TypeAnn
 	}, nil
 }
 
-ListType ← "list" WS "<" WS typ:FieldType WS ">" __ annotations:TypeAnnotations? {
+ListType ← "list" WS "<" WS typ:FieldType WS ">" _ annotations:TypeAnnotations? {
 	return &Type{
 		Name: "list",
 		ValueType: typ.(*Type),
