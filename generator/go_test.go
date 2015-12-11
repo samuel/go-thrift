@@ -26,7 +26,7 @@ func TestSimple(t *testing.T) {
 	}
 	defer os.RemoveAll(outPath)
 
-	p := &parser.Parser{}
+	p := parser.New()
 	for _, fn := range files {
 		t.Logf("Testing %s", fn)
 		th, _, err := p.ParseFile(fn)

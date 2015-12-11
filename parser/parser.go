@@ -21,6 +21,13 @@ type Filesystem interface {
 
 type Parser struct {
 	Filesystem Filesystem // For handling includes. Can be set to nil to fall back to os package.
+	Files      map[string]*Thrift
+}
+
+func New() *Parser {
+	return &Parser{
+		Files: map[string]*Thrift{},
+	}
 }
 
 func (p *Parser) Parse(r io.Reader, opts ...Option) (*Thrift, error) {
@@ -40,8 +47,6 @@ func (p *Parser) Parse(r io.Reader, opts ...Option) (*Thrift, error) {
 }
 
 func (p *Parser) ParseFile(filename string) (map[string]*Thrift, string, error) {
-	files := make(map[string]*Thrift)
-
 	absPath, err := p.abs(filename)
 	if err != nil {
 		return nil, "", err
@@ -49,6 +54,9 @@ func (p *Parser) ParseFile(filename string) (map[string]*Thrift, string, error) 
 
 	path := absPath
 	for path != "" {
+		if _, ok := p.Files[path]; ok {
+			break
+		}
 		rd, err := p.open(path)
 		if err != nil {
 			return nil, "", err
@@ -57,7 +65,7 @@ func (p *Parser) ParseFile(filename string) (map[string]*Thrift, string, error) 
 		if err != nil {
 			return nil, "", err
 		}
-		files[path] = thrift
+		p.Files[path] = thrift
 
 		basePath := filepath.Dir(path)
 		for incName, incPath := range thrift.Includes {
@@ -70,9 +78,9 @@ func (p *Parser) ParseFile(filename string) (map[string]*Thrift, string, error) 
 
 		// Find path for next unparsed include
 		path = ""
-		for _, th := range files {
+		for _, th := range p.Files {
 			for _, incPath := range th.Includes {
-				if files[incPath] == nil {
+				if p.Files[incPath] == nil {
 					path = incPath
 					break
 				}
@@ -80,7 +88,7 @@ func (p *Parser) ParseFile(filename string) (map[string]*Thrift, string, error) 
 		}
 	}
 
-	return files, absPath, nil
+	return p.Files, absPath, nil
 }
 
 func (p *Parser) open(path string) (io.ReadCloser, error) {

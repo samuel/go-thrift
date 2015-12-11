@@ -79,7 +79,7 @@ func main() {
 	filename := flag.Arg(0)
 	outpath := flag.Arg(1)
 
-	p := &parser.Parser{}
+	p := parser.New()
 	parsedThrift, _, err := p.ParseFile(filename)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%s\n", err.Error())
