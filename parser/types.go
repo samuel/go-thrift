@@ -7,19 +7,29 @@ package parser
 import "fmt"
 
 type Type struct {
-	Name      string
-	KeyType   *Type // If map
-	ValueType *Type // If map, list, or set
+	Name        string
+	KeyType     *Type // If map
+	ValueType   *Type // If map, list, or set
+	Annotations []*Annotation
+}
+
+type Typedef struct {
+	*Type
+
+	Alias       string
+	Annotations []*Annotation
 }
 
 type EnumValue struct {
-	Name  string
-	Value int
+	Name        string
+	Value       int
+	Annotations []*Annotation
 }
 
 type Enum struct {
-	Name   string
-	Values map[string]*EnumValue
+	Name        string
+	Values      map[string]*EnumValue
+	Annotations []*Annotation
 }
 
 type Constant struct {
@@ -29,36 +39,40 @@ type Constant struct {
 }
 
 type Field struct {
-	ID       int
-	Name     string
-	Optional bool
-	Type     *Type
-	Default  interface{}
+	ID          int
+	Name        string
+	Optional    bool
+	Type        *Type
+	Default     interface{}
+	Annotations []*Annotation
 }
 
 type Struct struct {
-	Name   string
-	Fields []*Field
+	Name        string
+	Fields      []*Field
+	Annotations []*Annotation
 }
 
 type Method struct {
-	Comment    string
-	Name       string
-	Oneway     bool
-	ReturnType *Type
-	Arguments  []*Field
-	Exceptions []*Field
+	Comment     string
+	Name        string
+	Oneway      bool
+	ReturnType  *Type
+	Arguments   []*Field
+	Exceptions  []*Field
+	Annotations []*Annotation
 }
 
 type Service struct {
-	Name    string
-	Extends string
-	Methods map[string]*Method
+	Name        string
+	Extends     string
+	Methods     map[string]*Method
+	Annotations []*Annotation
 }
 
 type Thrift struct {
 	Includes   map[string]string // name -> unique identifier (absolute path generally)
-	Typedefs   map[string]*Type
+	Typedefs   map[string]*Typedef
 	Namespaces map[string]string
 	Constants  map[string]*Constant
 	Enums      map[string]*Enum
@@ -72,6 +86,11 @@ type Identifier string
 
 type KeyValue struct {
 	Key, Value interface{}
+}
+
+type Annotation struct {
+	Name  string
+	Value string
 }
 
 func (t *Type) String() string {
