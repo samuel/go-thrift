@@ -132,7 +132,7 @@ Enum ← "enum" _ name:Identifier __ '{' __ values:(EnumValue __)* '}' EOS {
 	next := 0
 	for _, v := range vs {
 		ev := v.([]interface{})[0].(*EnumValue)
-		if ev.Value < 0 {
+		if !ev.Set {
 			ev.Value = next
 		}
 		if ev.Value >= next {
@@ -146,10 +146,10 @@ Enum ← "enum" _ name:Identifier __ '{' __ values:(EnumValue __)* '}' EOS {
 EnumValue ← name:Identifier _ value:('=' _ IntConstant)? ListSeparator? {
 	ev := &EnumValue{
 		Name: string(name.(Identifier)),
-		Value: -1,
 	}
 	if value != nil {
 		ev.Value = int(value.([]interface{})[2].(int64))
+		ev.Set = true
 	}
 	return ev, nil
 }

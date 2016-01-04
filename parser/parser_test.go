@@ -191,10 +191,12 @@ func TestServiceParsing(t *testing.T) {
 			"ADD": &EnumValue{
 				Name:  "ADD",
 				Value: 1,
+				Set:   true,
 			},
 			"SUBTRACT": &EnumValue{
 				Name:  "SUBTRACT",
 				Value: 2,
+				Set:   true,
 			},
 		},
 	}

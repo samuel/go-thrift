@@ -15,6 +15,7 @@ type Type struct {
 type EnumValue struct {
 	Name  string
 	Value int
+	Set   bool
 }
 
 type Enum struct {
