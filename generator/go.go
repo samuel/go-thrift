@@ -16,6 +16,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -422,6 +423,30 @@ func (e *%s) UnmarshalJSON(b []byte) error {
 }
 `, enumName, enumName, enumName, enumName)
 
+	g.write(out, `
+func (e %s) Ptr() *%s {
+	return &e
+}
+`, enumName, enumName)
+
+	if *flagGoGenerateMethods {
+		valueStrings := make([]string, 0, len(enum.Values))
+		for _, val := range enum.Values {
+			valueStrings = append(valueStrings, strconv.FormatInt(int64(val.Value), 10))
+		}
+		sort.Strings(valueStrings)
+		valueStringsName := strings.ToLower(enumName) + "Values"
+
+		g.write(out, `
+var %s = []int32{%s}
+
+func (e *%s) Generate(rand *rand.Rand, size int) reflect.Value {
+	v := %s(%s[rand.Intn(%d)])
+	return reflect.ValueOf(&v)
+}
+`, valueStringsName, strings.Join(valueStrings, ", "), enumName, enumName, valueStringsName, len(valueNames))
+	}
+
 	return nil
 }
 
@@ -649,6 +674,7 @@ func (g *GoGenerator) generateSingle(out io.Writer, thriftPath string, thrift *p
 		for _, k := range sortedKeys(thrift.Typedefs) {
 			t := thrift.Typedefs[k]
 			g.write(out, "type %s %s\n", camelCase(k), g.formatType(g.pkg, g.thrift, t, toNoPointer))
+			g.write(out, fmt.Sprintf("func (e %s) Ptr() *%s { return &e }\n", camelCase(k), camelCase(k)))
 		}
 	}
 

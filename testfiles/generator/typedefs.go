@@ -9,8 +9,16 @@ import (
 var _ = fmt.Sprintf
 
 type Binary []byte
+
+func (e Binary) Ptr() *Binary { return &e }
+
 type Int32 int32
+
+func (e Int32) Ptr() *Int32 { return &e }
+
 type String string
+
+func (e String) Ptr() *String { return &e }
 
 type St struct {
 	B *Binary `thrift:"1,required" json:"b"`

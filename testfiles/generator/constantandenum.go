@@ -60,3 +60,7 @@ func (e *MyEnum) UnmarshalJSON(b []byte) error {
 	*e = MyEnum(i)
 	return err
 }
+
+func (e MyEnum) Ptr() *MyEnum {
+	return &e
+}
