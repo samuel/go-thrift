@@ -305,6 +305,12 @@ func (g *GoGenerator) formatValue(v interface{}, t *parser.Type) (string, error)
 	case int:
 		return strconv.Itoa(v2), nil
 	case int64:
+		if t.Name == "bool" {
+			if v2 == 0 {
+				return "false", nil
+			}
+			return "true", nil
+		}
 		return strconv.FormatInt(v2, 10), nil
 	case float64:
 		return strconv.FormatFloat(v2, 'f', -1, 64), nil
