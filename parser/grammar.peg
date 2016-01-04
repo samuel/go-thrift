@@ -135,7 +135,7 @@ Enum ← "enum" _ name:Identifier __ '{' __ values:(EnumValue __)* '}' _ annotat
 	next := 0
 	for _, v := range vs {
 		ev := v.([]interface{})[0].(*EnumValue)
-		if ev.Value < 0 {
+		if !ev.Set {
 			ev.Value = next
 		}
 		if ev.Value >= next {
@@ -149,11 +149,11 @@ Enum ← "enum" _ name:Identifier __ '{' __ values:(EnumValue __)* '}' _ annotat
 EnumValue ← name:Identifier _ value:('=' _ IntConstant)? _ annotations:TypeAnnotations? ListSeparator? {
 	ev := &EnumValue{
 		Name: string(name.(Identifier)),
-		Value: -1,
 		Annotations: toAnnotations(annotations),
 	}
 	if value != nil {
 		ev.Value = int(value.([]interface{})[2].(int64))
+		ev.Set = true
 	}
 	return ev, nil
 }
