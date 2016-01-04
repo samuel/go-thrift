@@ -21,4 +21,5 @@ exception FailedException
 
 service scribe {
   ResultCode Log(1: list<LogEntry> messages) throws (1: FailedException f)
+  LogEntry Echo(1: LogEntry messages) throws (1: FailedException f)
 }

@@ -67,16 +67,28 @@ type FailedException struct {
 	Reason string `thrift:"1,required" json:"reason"`
 }
 
-func (e *FailedException) Error() string {
+func (e FailedException) Error() string {
 	return fmt.Sprintf("FailedException{Reason: %+v}", e.Reason)
 }
 
 type Scribe interface {
-	Log(messages []*LogEntry) (ResultCode, error)
+	Echo(messages LogEntry) (LogEntry, error)
+	Log(messages []LogEntry) (ResultCode, error)
 }
 
 type ScribeServer struct {
 	Implementation Scribe
+}
+
+func (s *ScribeServer) Echo(req *ScribeEchoRequest, res *ScribeEchoResponse) error {
+	val, err := s.Implementation.Echo(req.Messages)
+	switch e := err.(type) {
+	case *FailedException:
+		res.F = e
+		err = nil
+	}
+	res.Value = &val
+	return err
 }
 
 func (s *ScribeServer) Log(req *ScribeLogRequest, res *ScribeLogResponse) error {
@@ -90,8 +102,17 @@ func (s *ScribeServer) Log(req *ScribeLogRequest, res *ScribeLogResponse) error 
 	return err
 }
 
+type ScribeEchoRequest struct {
+	Messages LogEntry `thrift:"1,required" json:"messages"`
+}
+
+type ScribeEchoResponse struct {
+	Value *LogEntry        `thrift:"0" json:"value,omitempty"`
+	F     *FailedException `thrift:"1" json:"f,omitempty"`
+}
+
 type ScribeLogRequest struct {
-	Messages []*LogEntry `thrift:"1,required" json:"messages"`
+	Messages []LogEntry `thrift:"1,required" json:"messages"`
 }
 
 type ScribeLogResponse struct {
@@ -103,7 +124,25 @@ type ScribeClient struct {
 	Client RPCClient
 }
 
-func (s *ScribeClient) Log(messages []*LogEntry) (ret ResultCode, err error) {
+func (s *ScribeClient) Echo(messages LogEntry) (ret LogEntry, err error) {
+	req := &ScribeEchoRequest{
+		Messages: messages,
+	}
+	res := &ScribeEchoResponse{}
+	err = s.Client.Call("Echo", req, res)
+	if err == nil {
+		switch {
+		case res.F != nil:
+			err = res.F
+		}
+	}
+	if err == nil && res.Value != nil {
+		ret = *res.Value
+	}
+	return
+}
+
+func (s *ScribeClient) Log(messages []LogEntry) (ret ResultCode, err error) {
 	req := &ScribeLogRequest{
 		Messages: messages,
 	}

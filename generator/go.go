@@ -214,21 +214,21 @@ func (g *GoGenerator) formatType(pkg string, thrift *parser.Thrift, typ *parser.
 		if pkg != g.pkg {
 			name = pkg + "." + name
 		}
-		return "*" + name
+		return ptr + name
 	}
 	if e := thrift.Exceptions[typ.Name]; e != nil {
 		name := e.Name
 		if pkg != g.pkg {
 			name = pkg + "." + name
 		}
-		return "*" + name
+		return ptr + name
 	}
 	if u := thrift.Unions[typ.Name]; u != nil {
 		name := u.Name
 		if pkg != g.pkg {
 			name = pkg + "." + name
 		}
-		return "*" + name
+		return ptr + name
 	}
 
 	g.error(ErrUnknownType(typ.Name))
@@ -254,6 +254,10 @@ func (g *GoGenerator) resolveType(typ *parser.Type) string {
 		return g.resolveType(t.Type)
 	}
 	return typ.Name
+}
+
+func isContainer(typ *parser.Type) bool {
+	return typ.Name == "map" || typ.Name == "list" || typ.Name == "set" || (!*flagGoBinarystring && typ.Name == "binary")
 }
 
 func (g *GoGenerator) formatField(field *parser.Field) string {
@@ -481,7 +485,7 @@ func (g *GoGenerator) writeException(out io.Writer, ex *parser.Struct) error {
 
 	exName := camelCase(ex.Name)
 
-	g.write(out, "\nfunc (e *%s) Error() string {\n", exName)
+	g.write(out, "\nfunc (e %s) Error() string {\n", exName)
 	if len(ex.Fields) == 0 {
 		g.write(out, "\treturn \"%s{}\"\n", exName)
 	} else {
@@ -548,13 +552,12 @@ func (g *GoGenerator) writeService(out io.Writer, svc *parser.Service) error {
 		if len(method.Exceptions) > 0 {
 			g.write(out, "\tswitch e := err.(type) {\n")
 			for _, ex := range method.Exceptions {
-				g.write(out, "\tcase %s:\n\t\tres.%s = e\n\t\terr = nil\n", g.formatType(g.pkg, g.thrift, ex.Type, 0), camelCase(ex.Name))
+				g.write(out, "\tcase %s:\n\t\tres.%s = e\n\t\terr = nil\n", g.formatType(g.pkg, g.thrift, ex.Type, toOptional), camelCase(ex.Name))
 			}
 			g.write(out, "\t}\n")
 		}
 		if !isVoid {
-			typ := g.resolveType(method.ReturnType)
-			if !g.Pointers && (basicTypes[typ] || g.thrift.Enums[typ] != nil) {
+			if !g.Pointers && !isContainer(method.ReturnType) {
 				g.write(out, "\tres.Value = &val\n")
 			} else {
 				g.write(out, "\tres.Value = val\n")
@@ -636,8 +639,7 @@ func (g *GoGenerator) writeService(out io.Writer, svc *parser.Service) error {
 		}
 
 		if method.ReturnType != nil && method.ReturnType.Name != "void" {
-			typ := g.resolveType(method.ReturnType)
-			if !g.Pointers && (basicTypes[typ] || g.thrift.Enums[typ] != nil) {
+			if !g.Pointers && !isContainer(method.ReturnType) {
 				g.write(out, "\tif err == nil && res.Value != nil {\n\t ret = *res.Value\n}\n")
 			} else {
 				g.write(out, "\tif err == nil {\n\tret = res.Value\n}\n")
