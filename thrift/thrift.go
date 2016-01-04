@@ -252,14 +252,15 @@ func encodeFields(t reflect.Type) structMeta {
 				continue
 			}
 			id, opts := parseTag(tv)
-			if id >= 64 {
-				// TODO: figure out a better way to deal with this
-				panic("thrift: field id must be < 64")
-			}
 			ef.id = id
 			ef.name = f.Name
 			ef.required = opts.Contains("required")
 			if ef.required {
+				if id >= 64 {
+					// TODO: figure out a better way to deal with this
+					panic("thrift: field id must be < 64")
+				}
+
 				m.required |= 1 << byte(id)
 			}
 			ef.keepEmpty = opts.Contains("keepempty")

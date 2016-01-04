@@ -23,7 +23,7 @@ type Typedef struct {
 type EnumValue struct {
 	Name        string
 	Value       int
-	Set   bool
+	Set         bool
 	Annotations []*Annotation
 }
 
