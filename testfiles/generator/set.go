@@ -13,3 +13,27 @@ type StSet struct {
 	I32Set    map[int32]struct{}  `thrift:"2,required" json:"i32_set"`
 	BinarySet map[string]struct{} `thrift:"3,required" json:"binary_set"`
 }
+
+func (s *StSet) GetStringSet() (val map[string]struct{}) {
+	if s != nil {
+		return s.StringSet
+	}
+
+	return
+}
+
+func (s *StSet) GetI32Set() (val map[int32]struct{}) {
+	if s != nil {
+		return s.I32Set
+	}
+
+	return
+}
+
+func (s *StSet) GetBinarySet() (val map[string]struct{}) {
+	if s != nil {
+		return s.BinarySet
+	}
+
+	return
+}

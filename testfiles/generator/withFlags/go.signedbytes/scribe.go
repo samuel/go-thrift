@@ -63,8 +63,32 @@ type LogEntry struct {
 	Message  string `thrift:"2,required" json:"message"`
 }
 
+func (l *LogEntry) GetCategory() (val string) {
+	if l != nil {
+		return l.Category
+	}
+
+	return
+}
+
+func (l *LogEntry) GetMessage() (val string) {
+	if l != nil {
+		return l.Message
+	}
+
+	return
+}
+
 type FailedException struct {
 	Reason string `thrift:"1,required" json:"reason"`
+}
+
+func (f *FailedException) GetReason() (val string) {
+	if f != nil {
+		return f.Reason
+	}
+
+	return
 }
 
 func (e FailedException) Error() string {
@@ -106,18 +130,66 @@ type ScribeEchoRequest struct {
 	Messages LogEntry `thrift:"1,required" json:"messages"`
 }
 
+func (s *ScribeEchoRequest) GetMessages() (val LogEntry) {
+	if s != nil {
+		return s.Messages
+	}
+
+	return
+}
+
 type ScribeEchoResponse struct {
 	Value *LogEntry        `thrift:"0" json:"value,omitempty"`
 	F     *FailedException `thrift:"1" json:"f,omitempty"`
+}
+
+func (s *ScribeEchoResponse) GetValue() (val LogEntry) {
+	if s != nil && s.Value != nil {
+		return *s.Value
+	}
+
+	return
+}
+
+func (s *ScribeEchoResponse) GetF() (val FailedException) {
+	if s != nil && s.F != nil {
+		return *s.F
+	}
+
+	return
 }
 
 type ScribeLogRequest struct {
 	Messages []LogEntry `thrift:"1,required" json:"messages"`
 }
 
+func (s *ScribeLogRequest) GetMessages() (val []LogEntry) {
+	if s != nil {
+		return s.Messages
+	}
+
+	return
+}
+
 type ScribeLogResponse struct {
 	Value *ResultCode      `thrift:"0" json:"value,omitempty"`
 	F     *FailedException `thrift:"1" json:"f,omitempty"`
+}
+
+func (s *ScribeLogResponse) GetValue() (val ResultCode) {
+	if s != nil && s.Value != nil {
+		return *s.Value
+	}
+
+	return
+}
+
+func (s *ScribeLogResponse) GetF() (val FailedException) {
+	if s != nil && s.F != nil {
+		return *s.F
+	}
+
+	return
 }
 
 type ScribeClient struct {

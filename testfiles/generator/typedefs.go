@@ -25,3 +25,27 @@ type St struct {
 	S *String `thrift:"2,required" json:"s"`
 	I *Int32  `thrift:"3,required" json:"i"`
 }
+
+func (s *St) GetB() (val Binary) {
+	if s != nil && s.B != nil {
+		return *s.B
+	}
+
+	return
+}
+
+func (s *St) GetS() (val String) {
+	if s != nil && s.S != nil {
+		return *s.S
+	}
+
+	return
+}
+
+func (s *St) GetI() (val Int32) {
+	if s != nil && s.I != nil {
+		return *s.I
+	}
+
+	return
+}
