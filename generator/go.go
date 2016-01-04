@@ -91,6 +91,9 @@ var goKeywords = map[string]bool{
 	"import":      true,
 	"return":      true,
 	"var":         true,
+
+	// request arguments are hardcoded to 'req'; blacklist it to prevent accidental name collisions
+	"req": true,
 }
 
 var basicTypes = map[string]bool{
