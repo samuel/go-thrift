@@ -54,6 +54,10 @@ func (e *ResultCode) UnmarshalJSON(b []byte) error {
 	return err
 }
 
+func (e ResultCode) Ptr() *ResultCode {
+	return &e
+}
+
 type LogEntry struct {
 	Category *string `thrift:"1,required" json:"category"`
 	Message  *string `thrift:"2,required" json:"message"`

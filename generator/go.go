@@ -431,6 +431,12 @@ func (e *%s) UnmarshalJSON(b []byte) error {
 }
 `, enumName, enumName, enumName, enumName)
 
+	g.write(out, `
+func (e %s) Ptr() *%s {
+	return &e
+}
+`, enumName, enumName)
+
 	if *flagGoGenerateMethods {
 		valueStrings := make([]string, 0, len(enum.Values))
 		for _, val := range enum.Values {
@@ -682,6 +688,7 @@ func (g *GoGenerator) generateSingle(out io.Writer, thriftPath string, thrift *p
 		for _, k := range sortedKeys(thrift.Typedefs) {
 			t := thrift.Typedefs[k]
 			g.write(out, "type %s %s\n", camelCase(k), g.formatType(g.pkg, g.thrift, t.Type, toNoPointer))
+			g.write(out, fmt.Sprintf("func (e %s) Ptr() *%s { return &e }\n", camelCase(k), camelCase(k)))
 		}
 	}
 
