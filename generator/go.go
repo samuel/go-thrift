@@ -18,6 +18,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"text/template"
 
 	"github.com/samuel/go-thrift/parser"
 )
@@ -264,6 +265,54 @@ func (g *GoGenerator) formatField(field *parser.Field) string {
 		camelCase(field.Name), g.formatType(g.pkg, g.thrift, field.Type, opt), field.ID, tags, field.Name, jsonTags)
 }
 
+var getterTmpl = template.Must(template.New("").Parse(`func ({{ .Receiver }} *{{ .Typ }}) Get{{ .Field }}() (val {{ .FieldTyp }}) {
+	if {{ .Receiver }} != nil && {{ .Receiver }}.{{ .Field }} != nil {
+		return {{ if .Ptr }}*{{ end }}{{ .Receiver }}.{{ .Field }}
+	}
+
+{{ if .Zero }}
+	val = {{ .Zero }}
+{{ end }}
+	return
+}
+`))
+
+func (g *GoGenerator) formatFieldGetter(receiver, typ string, field *parser.Field) string {
+	buf := new(bytes.Buffer)
+
+	zero := ""
+	if field.Default != nil {
+		var err error
+		zero, err = g.formatValue(field.Default, field.Type)
+		if err != nil {
+			g.error(err)
+		}
+	}
+
+	isPtr := !(field.Type.Name == "list" || field.Type.Name == "set" || field.Type.Name == "map")
+	if field.Type.Name == "binary" && !*flagGoBinarystring {
+		isPtr = false
+	}
+
+	if err := getterTmpl.Execute(buf, struct {
+		Receiver, Typ   string
+		Field, FieldTyp string
+		Zero            string
+		Ptr             bool
+	}{
+		Receiver: receiver,
+		Typ:      typ,
+		Field:    camelCase(field.Name),
+		FieldTyp: g.formatType(g.pkg, g.thrift, field.Type, toNoPointer),
+		Zero:     zero,
+		Ptr:      isPtr,
+	}); err != nil {
+		g.error(err)
+	}
+
+	return buf.String()
+}
+
 func (g *GoGenerator) formatArguments(arguments []*parser.Field) string {
 	args := make([]string, len(arguments))
 	for i, arg := range arguments {
@@ -432,7 +481,16 @@ func (g *GoGenerator) writeStruct(out io.Writer, st *parser.Struct) error {
 	for _, field := range st.Fields {
 		g.write(out, "\t%s\n", g.formatField(field))
 	}
-	return g.write(out, "}\n")
+	g.write(out, "}\n")
+
+	receiver := strings.ToLower(structName[:1])
+
+	// generate Get methods for all fields
+	for _, field := range st.Fields {
+		g.write(out, "%s\n", g.formatFieldGetter(receiver, structName, field))
+	}
+
+	return g.write(out, "\n")
 }
 
 func (g *GoGenerator) writeException(out io.Writer, ex *parser.Struct) error {
