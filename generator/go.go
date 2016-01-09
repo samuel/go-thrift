@@ -59,6 +59,7 @@ type GoGenerator struct {
 	Packages    map[string]GoPackage
 	Format      bool
 	Pointers    bool
+	SignedBytes bool
 }
 
 var goKeywords = map[string]bool{
@@ -170,7 +171,7 @@ func (g *GoGenerator) formatType(pkg string, thrift *parser.Thrift, typ *parser.
 	case "bool", "string":
 		return ptr + typ.Name
 	case "byte":
-		if *flagGoSignedBytes {
+		if g.SignedBytes {
 			return ptr + "int8"
 		}
 		return ptr + typ.Name

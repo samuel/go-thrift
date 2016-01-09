@@ -47,6 +47,40 @@ func TestSimple(t *testing.T) {
 	}
 }
 
+func TestFlagGoSignedBytes(t *testing.T) {
+	files, err := filepath.Glob("../testfiles/generator/withFlags/go.signedbytes/*.thrift")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	outPath, err := ioutil.TempDir("", "go-thrift-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(outPath)
+
+	p := &parser.Parser{}
+	for _, fn := range files {
+		t.Logf("Testing %s", fn)
+		th, _, err := p.ParseFile(fn)
+		if err != nil {
+			t.Fatalf("Failed to parse %s: %s", fn, err)
+		}
+		generator := &GoGenerator{
+			ThriftFiles: th,
+			Format:      true,
+			Pointers:    false,
+			SignedBytes: true,
+		}
+		if err := generator.Generate(outPath); err != nil {
+			t.Fatalf("Failed to generate go for %s: %s", fn, err)
+		}
+		base := fn[:len(fn)-len(".thrift")]
+		name := filepath.Base(base)
+		compareFiles(t, outPath+"/gentest/"+name+".go", base+".go")
+	}
+}
+
 func compareFiles(t *testing.T, actualPath, expectedPath string) {
 	ac, err := ioutil.ReadFile(actualPath)
 	if err != nil {
