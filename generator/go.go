@@ -205,21 +205,21 @@ func (g *GoGenerator) formatType(pkg string, thrift *parser.Thrift, typ *parser.
 		if pkg != g.pkg {
 			name = pkg + "." + name
 		}
-		return "*" + name
+		return ptr + name
 	}
 	if e := thrift.Exceptions[typ.Name]; e != nil {
 		name := e.Name
 		if pkg != g.pkg {
 			name = pkg + "." + name
 		}
-		return "*" + name
+		return ptr + name
 	}
 	if u := thrift.Unions[typ.Name]; u != nil {
 		name := u.Name
 		if pkg != g.pkg {
 			name = pkg + "." + name
 		}
-		return "*" + name
+		return ptr + name
 	}
 
 	g.error(ErrUnknownType(typ.Name))
@@ -301,7 +301,7 @@ func (g *GoGenerator) formatValue(v interface{}, t *parser.Type) (string, error)
 		return strconv.FormatFloat(v2, 'f', -1, 64), nil
 	case []interface{}:
 		buf := &bytes.Buffer{}
-		buf.WriteString(g.formatType(g.pkg, g.thrift, t, 0))
+		buf.WriteString(g.formatType(g.pkg, g.thrift, t, toNoPointer))
 		buf.WriteString("{\n")
 		for _, v := range v2 {
 			buf.WriteString("\t\t")
@@ -319,7 +319,7 @@ func (g *GoGenerator) formatValue(v interface{}, t *parser.Type) (string, error)
 		return buf.String(), nil
 	case []parser.KeyValue:
 		buf := &bytes.Buffer{}
-		buf.WriteString(g.formatType(g.pkg, g.thrift, t, 0))
+		buf.WriteString(g.formatType(g.pkg, g.thrift, t, toNoPointer))
 		buf.WriteString("{\n")
 		for _, kv := range v2 {
 			buf.WriteString("\t\t")
