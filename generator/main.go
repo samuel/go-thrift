@@ -89,6 +89,7 @@ func main() {
 	generator := &GoGenerator{
 		ThriftFiles: parsedThrift,
 		Format:      true,
+		SignedBytes: *flagGoSignedBytes,
 	}
 	err = generator.Generate(outpath)
 	if err != nil {

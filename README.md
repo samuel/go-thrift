@@ -77,10 +77,17 @@ How to use the generator:
     $ go install github.com/samuel/go-thrift/generator
 
     $ generator --help
-    Usage of parsimony: [options] inputfile outputpath
-      -go.binarystring=false: Always use string for binary instead of []byte
-      -go.json.enumnum=false: For JSON marshal enums by number instead of name
-      -go.pointers=false: Make all fields pointers
+    Usage of generator:
+      -go.binarystring
+            Always use string for binary instead of []byte
+      -go.importprefix string
+            Prefix for Thrift-generated go package imports
+      -go.json.enumnum
+            For JSON marshal enums by number instead of name
+      -go.pointers
+            Make all fields pointers
+      -go.signedbytes
+            Interpret Thrift byte as Go signed int8 type
 
     $ generator cassandra.thrift $GOPATH/src/
 

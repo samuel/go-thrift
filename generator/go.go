@@ -24,9 +24,10 @@ import (
 
 var (
 	flagGoBinarystring = flag.Bool("go.binarystring", false, "Always use string for binary instead of []byte")
+	flagGoImportPrefix = flag.String("go.importprefix", "", "Prefix for Thrift-generated go package imports")
 	flagGoJSONEnumnum  = flag.Bool("go.json.enumnum", false, "For JSON marshal enums by number instead of name")
 	flagGoPointers     = flag.Bool("go.pointers", false, "Make all fields pointers")
-	flagGoImportPrefix = flag.String("go.importprefix", "", "Prefix for thrift-generated go package imports")
+	flagGoSignedBytes  = flag.Bool("go.signedbytes", false, "Interpret Thrift byte as Go signed int8 type")
 )
 
 var (
@@ -58,6 +59,7 @@ type GoGenerator struct {
 	Packages    map[string]GoPackage
 	Format      bool
 	Pointers    bool
+	SignedBytes bool
 }
 
 var goKeywords = map[string]bool{
@@ -161,13 +163,18 @@ func (g *GoGenerator) formatType(pkg string, thrift *parser.Thrift, typ *parser.
 		ptr = "*"
 	}
 	switch typ.Name {
-	case "byte", "bool", "string":
-		return ptr + typ.Name
 	case "binary":
 		if *flagGoBinarystring {
 			return ptr + "string"
 		}
 		return "[]byte"
+	case "bool", "string":
+		return ptr + typ.Name
+	case "byte":
+		if g.SignedBytes {
+			return ptr + "int8"
+		}
+		return ptr + typ.Name
 	case "i16":
 		return ptr + "int16"
 	case "i32":
