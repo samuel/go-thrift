@@ -107,7 +107,7 @@ Include ← "include" _ file:Literal EOS {
 
 Statement ← Include / Namespace / Const / Enum / TypeDef / Struct / Exception / Union / Service
 
-Namespace ← "namespace" _ scope:[a-z.-]+ _ ns:Identifier EOS {
+Namespace ← "namespace" _ scope:[*a-z.-]+ _ ns:Identifier EOS {
 	return &namespace{
 		scope: ifaceSliceToString(scope),
 		namespace: string(ns.(Identifier)),
