@@ -660,10 +660,11 @@ func (g *GoGenerator) generateSingle(out io.Writer, thriftPath string, thrift *p
 				g.error(err)
 			}
 
-			if c.Type.Name == "list" || c.Type.Name == "map" || c.Type.Name == "set" {
-				g.write(out, "var ")
-			} else {
+			switch c.Value.(type) {
+			case string, int, int64, float64:
 				g.write(out, "const ")
+			default:
+				g.write(out, "var ")
 			}
 			g.write(out, "\t%s = %+v\n", camelCase(c.Name), v)
 		}
