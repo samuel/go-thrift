@@ -97,6 +97,7 @@ func (f *FramedReadWriteCloser) Write(p []byte) (int, error) {
 		return n, err
 	}
 	if ln := int64(f.wbuf.Len()); ln > f.maxFrameSize {
+		f.wbuf.Reset()
 		return n, &ErrFrameTooBig{ln, f.maxFrameSize}
 	}
 	return n, nil
