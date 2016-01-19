@@ -18,7 +18,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
-
+	
 	"github.com/siklosid/go-thrift/parser"
 )
 
