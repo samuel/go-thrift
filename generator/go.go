@@ -18,8 +18,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
-	
-	"github.com/siklosid/go-thrift/parser"
+	"github.com/samuel/go-thrift/parser"
 )
 
 var (
