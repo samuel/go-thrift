@@ -565,7 +565,7 @@ func (g *GoGenerator) writeService(out io.Writer, svc *parser.Service) error {
 	for _, k := range methodNames {
 		method := svc.Methods[k]
 		methodName := camelCase(method.Name)
-		returnType := "err error"
+		returnType := "(err error)"
 		if !method.Oneway {
 			returnType = g.formatReturnType(method.ReturnType, true)
 		}
