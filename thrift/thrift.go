@@ -10,6 +10,8 @@ import (
 	"reflect"
 	"sort"
 	"sync"
+
+	"github.com/willf/bitset"
 )
 
 // Type identifiers for serialized Thrift
@@ -201,7 +203,7 @@ type encodeField struct {
 }
 
 type structMeta struct {
-	required   uint64 // bitmap of required fields
+	required   *bitset.BitSet // bitmap of required fields
 	orderedIds []int
 	fields     map[int]encodeField
 }
@@ -229,7 +231,7 @@ func encodeFields(t reflect.Type) structMeta {
 	}
 
 	fs := make(map[int]encodeField)
-	m = structMeta{fields: fs}
+	m = structMeta{fields: fs, required: bitset.New(64)}
 	v := reflect.Zero(t)
 	n := v.NumField()
 	for i := 0; i < n; i++ {
@@ -260,7 +262,7 @@ func encodeFields(t reflect.Type) structMeta {
 			ef.name = f.Name
 			ef.required = opts.Contains("required")
 			if ef.required {
-				m.required |= 1 << byte(id)
+				m.required.Set(uint(id))
 			}
 			ef.keepEmpty = opts.Contains("keepempty")
 			if opts.Contains("set") {
