@@ -732,18 +732,14 @@ func (g *GoGenerator) Generate(outPath string) (err error) {
 			for _, k := range goNamespaceOrder {
 				pkg.Name = th.Namespaces[k]
 				if pkg.Name != "" {
-					parts := strings.Split(pkg.Name, ".")
-					if len(parts) > 1 {
-						pkg.Path = strings.Join(parts[:len(parts)-1], "/")
-						pkg.Name = parts[len(parts)-1]
-					}
+					pkg.Path, pkg.Name = genNamespace(pkg.Name)
 					break
 				}
 			}
 			if pkg.Name == "" {
 				pkg.Name = filepath.Base(path)
 			}
-			pkg.Name = validIdentifier(strings.ToLower(pkg.Name), "_")
+			pkg.Name = validIdentifier(pkg.Name, "_")
 			g.Packages[path] = pkg
 		}
 	}
@@ -812,4 +808,15 @@ func (g *GoGenerator) Generate(outPath string) (err error) {
 	}
 
 	return nil
+}
+
+func genNamespace(namespace string) (string, string) {
+	var path string
+	if strings.Contains(namespace, "..") {
+		path = strings.Replace(namespace, "..", "/", -1)
+	} else {
+		path = strings.Replace(namespace, ".", "/", -1)
+	}
+
+	return filepath.Dir(path), filepath.Base(path)
 }
