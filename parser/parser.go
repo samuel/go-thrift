@@ -39,11 +39,13 @@ func (p *Parser) Parse(r io.Reader, opts ...Option) (*Thrift, error) {
 	if named, ok := r.(namedReader); ok {
 		name = named.Name()
 	}
-	t, err := Parse(name, b, opts...)
+	i, err := Parse(name, b, opts...)
 	if err != nil {
 		return nil, err
 	}
-	return t.(*Thrift), nil
+	t := i.(*Thrift)
+	t.Filename = name
+	return t, nil
 }
 
 func (p *Parser) ParseFile(filename string) (map[string]*Thrift, string, error) {

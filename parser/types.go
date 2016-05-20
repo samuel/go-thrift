@@ -6,92 +6,109 @@ package parser
 
 import "fmt"
 
+type Pos struct {
+	Line int
+	Col  int
+}
+
 type Type struct {
-	Name        string        `json:"name,omitempty"`
-	KeyType     *Type         `json:"key_type,omitempty"`   // If map
-	ValueType   *Type         `json:"value_type,omitempty"` // If map, list, or set
-	Annotations []*Annotation `json:"annotations,omitempty"`
+	Pos         Pos
+	Name        string        `json:",omitempty"`
+	KeyType     *Type         `json:",omitempty"` // If map
+	ValueType   *Type         `json:",omitempty"` // If map, list, or set
+	Annotations []*Annotation `json:",omitempty"`
 }
 
 type Typedef struct {
 	*Type
 
-	Alias       string        `json:"alias"`
-	Annotations []*Annotation `json:"annotations,omitempty"`
+	Pos         Pos
+	Alias       string
+	Annotations []*Annotation `json:",omitempty"`
 }
 
 type EnumValue struct {
-	Name        string        `json:"name"`
-	Value       int           `json:"value"`
-	Annotations []*Annotation `json:"annotations,omitempty"`
+	Pos         Pos
+	Name        string
+	Value       int
+	Annotations []*Annotation `json:",omitempty"`
 }
 
 type Enum struct {
-	Name        string                `json:"name"`
-	Values      map[string]*EnumValue `json:"values"`
-	Annotations []*Annotation         `json:"annotations,omitempty"`
+	Pos         Pos
+	Name        string
+	Values      map[string]*EnumValue
+	Annotations []*Annotation `json:",omitempty"`
 }
 
 type Constant struct {
-	Name  string `json:"name"`
-	Type  *Type  `json:"type"`
+	Pos   Pos
+	Name  string
+	Type  *Type
 	Value interface{}
 }
 
 type Field struct {
-	ID          int           `json:"id"`
-	Name        string        `json:"name"`
-	Optional    bool          `json:"optional"`
-	Type        *Type         `json:"type"`
-	Default     interface{}   `json:"default,omitempty"`
-	Annotations []*Annotation `json:"annotations,omitempty"`
+	Pos         Pos
+	ID          int
+	Name        string
+	Optional    bool
+	Type        *Type
+	Default     interface{}   `json:",omitempty"`
+	Annotations []*Annotation `json:",omitempty"`
 }
 
 type Struct struct {
-	Name        string        `json:"name"`
-	Fields      []*Field      `json:"fields"`
-	Annotations []*Annotation `json:"annotations,omitempty"`
+	Pos         Pos
+	Name        string
+	Fields      []*Field
+	Annotations []*Annotation `json:",omitempty"`
 }
 
 type Method struct {
-	Comment     string        `json:"comment"`
-	Name        string        `json:"name"`
-	Oneway      bool          `json:"one_way"`
-	ReturnType  *Type         `json:"return_type"`
-	Arguments   []*Field      `json:"arguments"`
-	Exceptions  []*Field      `json:"exceptions,omitempty"`
-	Annotations []*Annotation `json:"annotations,omitempty"`
+	Pos         Pos
+	Comment     string
+	Name        string
+	Oneway      bool
+	ReturnType  *Type
+	Arguments   []*Field
+	Exceptions  []*Field      `json:",omitempty"`
+	Annotations []*Annotation `json:",omitempty"`
 }
 
 type Service struct {
-	Name        string             `json:"name"`
-	Extends     string             `json:"extends,omitempty"`
-	Methods     map[string]*Method `json:"methods"`
-	Annotations []*Annotation      `json:"annotations,omitempty"`
+	Pos         Pos
+	Name        string
+	Extends     string `json:",omitempty"`
+	Methods     map[string]*Method
+	Annotations []*Annotation `json:",omitempty"`
 }
 
 type Thrift struct {
-	Includes   map[string]string    `json:"includes,omitempty"` // name -> unique identifier (absolute path generally)
-	Typedefs   map[string]*Typedef  `json:"typedefs,omitempty"`
-	Namespaces map[string]string    `json:"namespaces,omitempty"`
-	Constants  map[string]*Constant `json:"constants,omitempty"`
-	Enums      map[string]*Enum     `json:"enums,omitempty"`
-	Structs    map[string]*Struct   `json:"structs,omitempty"`
-	Exceptions map[string]*Struct   `json:"exceptions,omitempty"`
-	Unions     map[string]*Struct   `json:"unions,omitempty"`
-	Services   map[string]*Service  `json:"services,omitempty"`
+	Filename   string
+	Includes   map[string]string    `json:",omitempty"` // name -> unique identifier (absolute path generally)
+	Imports    map[string]*Thrift   `json:",omitempty"` // name -> imported file
+	Typedefs   map[string]*Typedef  `json:",omitempty"`
+	Namespaces map[string]string    `json:",omitempty"`
+	Constants  map[string]*Constant `json:",omitempty"`
+	Enums      map[string]*Enum     `json:",omitempty"`
+	Structs    map[string]*Struct   `json:",omitempty"`
+	Exceptions map[string]*Struct   `json:",omitempty"`
+	Unions     map[string]*Struct   `json:",omitempty"`
+	Services   map[string]*Service  `json:",omitempty"`
 }
 
 type Identifier string
 
 type KeyValue struct {
-	Key   interface{} `json:"key"`
-	Value interface{} `json:"value"`
+	Key   interface{}
+	Value interface{}
 }
 
 type Annotation struct {
-	Name  string `json:"name"`
-	Value string `json:"value"`
+	Pos   Pos
+	Name  string
+	Value string
 }
 
 func (t *Type) String() string {
