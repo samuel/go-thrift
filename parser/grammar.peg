@@ -14,11 +14,22 @@ type namespace struct {
 	namespace string
 }
 
+var inTests = false
+
 type exception *Struct
 
 type union *Struct
 
 type include string
+
+func makePos(p position) Pos {
+	// This is not ideal, but otherwise we'd have to constantly update position information
+	// in the test tables whenever the test source fragments changed.
+	if inTests {
+		return Pos{}
+	}
+	return Pos{Line: p.line, Col: p.col}
+}
 
 func toIfaceSlice(v interface{}) []interface{} {
     if v == nil {
@@ -116,7 +127,7 @@ Namespace ← "namespace" _ scope:[*a-z.-]+ _ ns:Identifier EOS {
 
 Const ← "const" _ typ:FieldType _ name:Identifier __ "=" __ value:ConstValue EOS {
 	return &Constant{
-		Pos: Pos{c.pos.line, c.pos.col},
+		Pos: makePos(c.pos),
 		Name: string(name.(Identifier)),
 		Type: typ.(*Type),
 		Value: value,
@@ -126,7 +137,7 @@ Const ← "const" _ typ:FieldType _ name:Identifier __ "=" __ value:ConstValue E
 Enum ← "enum" _ name:Identifier __ '{' __ values:(EnumValue __)* '}' _ annotations:TypeAnnotations? EOS {
 	vs := toIfaceSlice(values)
 	en := &Enum{
-		Pos: Pos{c.pos.line, c.pos.col},
+		Pos: makePos(c.pos),
 		Name: string(name.(Identifier)),
 		Values: make(map[string]*EnumValue, len(vs)),
 		Annotations: toAnnotations(annotations),
@@ -150,7 +161,7 @@ Enum ← "enum" _ name:Identifier __ '{' __ values:(EnumValue __)* '}' _ annotat
 
 EnumValue ← name:Identifier _ value:('=' _ IntConstant)? _ annotations:TypeAnnotations? ListSeparator? {
 	ev := &EnumValue{
-		Pos: Pos{c.pos.line, c.pos.col},
+		Pos: makePos(c.pos),
 		Name: string(name.(Identifier)),
 		Value: -1,
 		Annotations: toAnnotations(annotations),
@@ -163,7 +174,7 @@ EnumValue ← name:Identifier _ value:('=' _ IntConstant)? _ annotations:TypeAnn
 
 TypeDef ← "typedef" _ typ:FieldType _ name:Identifier _ annotations:TypeAnnotations? EOS {
 	return &Typedef{
-		Pos: Pos{c.pos.line, c.pos.col},
+		Pos: makePos(c.pos),
 		Type: typ.(*Type),
 		Alias: string(name.(Identifier)),
 		Annotations: toAnnotations(annotations),
@@ -175,7 +186,7 @@ Exception ← "exception" _ st:StructLike { return exception(st.(*Struct)), nil 
 Union ← "union" _ st:StructLike { return union(st.(*Struct)), nil }
 StructLike ← name:Identifier __ '{' __ fields:FieldList '}' _ annotations:TypeAnnotations? EOS {
 	st := &Struct{
-		Pos: Pos{c.pos.line, c.pos.col},
+		Pos: makePos(c.pos),
 		Name: string(name.(Identifier)),
 		Annotations: toAnnotations(annotations),
 	}
@@ -196,7 +207,7 @@ FieldList ← fields:(Field __)* {
 
 Field ← id:IntConstant _ ':' _ req:FieldReq? _ typ:FieldType _ name:Identifier __ def:('=' _ ConstValue)? _ annotations:TypeAnnotations? ListSeparator? {
 	f := &Field{
-		Pos      : Pos{c.pos.line, c.pos.col},
+		Pos      : makePos(c.pos),
 		ID       : int(id.(int64)),
 		Name     : string(name.(Identifier)),
 		Type     : typ.(*Type),
@@ -218,7 +229,7 @@ FieldReq ← ("required" / "optional") {
 Service ← "service" _ name:Identifier _ extends:("extends" __ Identifier __)? __ '{' __ methods:(Function __)* ('}' / EndOfServiceError) _ annotations:TypeAnnotations?  EOS {
 	ms := methods.([]interface{})
 	svc := &Service{
-		Pos: Pos{c.pos.line, c.pos.col},
+		Pos: makePos(c.pos),
 		Name: string(name.(Identifier)),
 		Methods: make(map[string]*Method, len(ms)),
 		Annotations: toAnnotations(annotations),
@@ -238,7 +249,7 @@ EndOfServiceError ← . {
 
 Function ← oneway:("oneway" __)? typ:FunctionType __ name:Identifier _ '(' __ arguments:FieldList ')' __ exceptions:Throws? _ annotations:TypeAnnotations? ListSeparator? {
 	m := &Method{
-		Pos: Pos{c.pos.line, c.pos.col},
+		Pos: makePos(c.pos),
 		Name: string(name.(Identifier)),
 		Annotations: toAnnotations(annotations),
 	}
@@ -266,7 +277,7 @@ FunctionType ← typ:("void" / FieldType) {
 		return t, nil
 	}
 	return &Type{
-		Pos: Pos{c.pos.line, c.pos.col},
+		Pos: makePos(c.pos),
 		Name: string(c.text),
 	}, nil
 }
@@ -278,7 +289,7 @@ Throws ← "throws" __ '(' __ exceptions:FieldList ')' {
 FieldType ← typ:(BaseType / ContainerType / Identifier) {
 	if t, ok := typ.(Identifier); ok {
 		return &Type{
-			Pos: Pos{c.pos.line, c.pos.col},
+			Pos: makePos(c.pos),
 			Name: string(t),
 		}, nil
 	}
@@ -291,7 +302,7 @@ DefinitionType ← typ:(BaseType / ContainerType) {
 
 BaseType ← name:BaseTypeName _ annotations:TypeAnnotations? {
 	return &Type{
-		Pos: Pos{c.pos.line, c.pos.col},
+		Pos: makePos(c.pos),
 		Name: name.(string),
 		Annotations: toAnnotations(annotations),
 	}, nil
@@ -307,7 +318,7 @@ ContainerType ← typ:(MapType / SetType / ListType) {
 
 MapType ← CppType? "map" WS "<" WS key:FieldType WS "," WS value:FieldType WS ">" _ annotations:TypeAnnotations? {
 	return &Type{
-		Pos: Pos{c.pos.line, c.pos.col},
+		Pos: makePos(c.pos),
 		Name: "map",
 		KeyType: key.(*Type),
 		ValueType: value.(*Type),
@@ -317,7 +328,7 @@ MapType ← CppType? "map" WS "<" WS key:FieldType WS "," WS value:FieldType WS 
 
 SetType ← CppType? "set" WS "<" WS typ:FieldType WS ">" _ annotations:TypeAnnotations? {
 	return &Type{
-		Pos: Pos{c.pos.line, c.pos.col},
+		Pos: makePos(c.pos),
 		Name: "set",
 		ValueType: typ.(*Type),
 		Annotations: toAnnotations(annotations),
@@ -326,7 +337,7 @@ SetType ← CppType? "set" WS "<" WS typ:FieldType WS ">" _ annotations:TypeAnno
 
 ListType ← "list" WS "<" WS typ:FieldType WS ">" _ annotations:TypeAnnotations? {
 	return &Type{
-		Pos: Pos{c.pos.line, c.pos.col},
+		Pos: makePos(c.pos),
 		Name: "list",
 		ValueType: typ.(*Type),
 		Annotations: toAnnotations(annotations),
@@ -353,7 +364,7 @@ TypeAnnotation ← name:Identifier _ value:('=' __ value:Literal { return value,
 		optValue = value.(string)
 	}
 	return &Annotation{
-		Pos: Pos{c.pos.line, c.pos.col},
+		Pos: makePos(c.pos),
 		Name: string(name.(Identifier)),
 		Value: optValue,
 	}, nil
