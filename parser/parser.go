@@ -64,6 +64,7 @@ func (p *Parser) ParseFile(filename string) (map[string]*Thrift, string, error) 
 			return nil, "", err
 		}
 		thrift, err := p.Parse(rd)
+		rd.Close()
 		if err != nil {
 			return nil, "", err
 		}
