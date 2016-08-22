@@ -9,6 +9,8 @@ import (
 
 var _ = fmt.Sprintf
 
+const Bf = false
+const Bt = true
 const Fst = MyEnumFirst
 
 var Stringy = map[MyEnum]string{

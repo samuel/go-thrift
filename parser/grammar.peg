@@ -107,7 +107,7 @@ Include ← "include" _ file:Literal EOS {
 
 Statement ← Include / Namespace / Const / Enum / TypeDef / Struct / Exception / Union / Service
 
-Namespace ← "namespace" _ scope:[*a-z.-]+ _ ns:Identifier EOS {
+Namespace ← "namespace" _ scope:[*a-z0-9.-]+ _ ns:Identifier EOS {
 	return &namespace{
 		scope: ifaceSliceToString(scope),
 		namespace: string(ns.(Identifier)),
@@ -200,7 +200,7 @@ FieldID ← id:IntConstant _ ':' {
 	return int(id.(int64)), nil
 }
 
-Field ← id:FieldID? _ req:FieldReq? _ typ:FieldType _ name:Identifier __ def:('=' _ ConstValue)? _ annotations:TypeAnnotations? ListSeparator? {
+Field ← id:FieldID? _ req:FieldReq? _ typ:FieldType __ name:Identifier __ def:('=' _ ConstValue)? _ annotations:TypeAnnotations? ListSeparator? {
 	parsedID := -1
 	if id != nil {
 		parsedID = id.(int)
@@ -306,7 +306,7 @@ ContainerType ← typ:(MapType / SetType / ListType) {
 	return typ, nil
 }
 
-MapType ← CppType? "map" WS "<" WS key:FieldType WS "," WS value:FieldType WS ">" _ annotations:TypeAnnotations? {
+MapType ← CppType? "map" WS "<" WS key:FieldType WS "," __ value:FieldType WS ">" _ annotations:TypeAnnotations? {
 	return &Type{
 		Name: "map",
 		KeyType: key.(*Type),
@@ -335,7 +335,7 @@ CppType ← "cpp_type" cppType:Literal {
 	return cppType, nil
 }
 
-ConstValue ← Literal / DoubleConstant / IntConstant / ConstMap / ConstList / Identifier
+ConstValue ← Literal / DoubleConstant / IntConstant / BoolConstant / ConstMap / ConstList / Identifier
 
 TypeAnnotations ← '(' __ annotations:TypeAnnotation* ')' {
 	var anns []*Annotation
@@ -356,6 +356,10 @@ TypeAnnotation ← name:Identifier _ value:('=' __ value:Literal { return value,
 	}, nil
 }
 
+BoolConstant ← ("true" / "false") {
+	return string(c.text) == "true", nil
+}
+
 IntConstant ← [-+]? Digit+ {
 	return strconv.ParseInt(string(c.text), 10, 64)
 }
@@ -373,7 +377,7 @@ ConstList ← '[' __ values:(ConstValue __ ListSeparator? __)* __ ']' {
 	return vs, nil
 }
 
-ConstMap ← '{' __ values:(ConstValue __ ':' __ ConstValue __ (',' / &'}') __)* '}' {
+ConstMap ← '{' __ values:(ConstValue __ ':' __ ConstValue __ (','? / &'}') __)* '}' {
 	if values == nil {
 		return nil, nil
 	}

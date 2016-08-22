@@ -92,7 +92,7 @@ func (f *FailedException) GetReason() (val string) {
 }
 
 func (e FailedException) Error() string {
-	return fmt.Sprintf("FailedException{Reason: %+v}", e.Reason)
+	return fmt.Sprintf("FailedException{Reason: %+v}", e.GetReason())
 }
 
 type Scribe interface {
@@ -104,7 +104,7 @@ type ScribeServer struct {
 	Implementation Scribe
 }
 
-func (s *ScribeServer) Echo(req *ScribeEchoRequest, res *ScribeEchoResponse) error {
+func (s *ScribeServer) Echo(req *InternalRPCScribeEchoRequest, res *InternalRPCScribeEchoResponse) error {
 	val, err := s.Implementation.Echo(req.Messages)
 	switch e := err.(type) {
 	case *FailedException:
@@ -115,7 +115,7 @@ func (s *ScribeServer) Echo(req *ScribeEchoRequest, res *ScribeEchoResponse) err
 	return err
 }
 
-func (s *ScribeServer) Log(req *ScribeLogRequest, res *ScribeLogResponse) error {
+func (s *ScribeServer) Log(req *InternalRPCScribeLogRequest, res *InternalRPCScribeLogResponse) error {
 	val, err := s.Implementation.Log(req.Messages)
 	switch e := err.(type) {
 	case *FailedException:
@@ -126,67 +126,67 @@ func (s *ScribeServer) Log(req *ScribeLogRequest, res *ScribeLogResponse) error 
 	return err
 }
 
-type ScribeEchoRequest struct {
+type InternalRPCScribeEchoRequest struct {
 	Messages *LogEntry `thrift:"1,required" json:"messages"`
 }
 
-func (s *ScribeEchoRequest) GetMessages() (val LogEntry) {
-	if s != nil && s.Messages != nil {
-		return *s.Messages
+func (i *InternalRPCScribeEchoRequest) GetMessages() (val LogEntry) {
+	if i != nil && i.Messages != nil {
+		return *i.Messages
 	}
 
 	return
 }
 
-type ScribeEchoResponse struct {
+type InternalRPCScribeEchoResponse struct {
 	Value *LogEntry        `thrift:"0" json:"value,omitempty"`
 	F     *FailedException `thrift:"1" json:"f,omitempty"`
 }
 
-func (s *ScribeEchoResponse) GetValue() (val LogEntry) {
-	if s != nil && s.Value != nil {
-		return *s.Value
+func (i *InternalRPCScribeEchoResponse) GetValue() (val LogEntry) {
+	if i != nil && i.Value != nil {
+		return *i.Value
 	}
 
 	return
 }
 
-func (s *ScribeEchoResponse) GetF() (val FailedException) {
-	if s != nil && s.F != nil {
-		return *s.F
+func (i *InternalRPCScribeEchoResponse) GetF() (val FailedException) {
+	if i != nil && i.F != nil {
+		return *i.F
 	}
 
 	return
 }
 
-type ScribeLogRequest struct {
+type InternalRPCScribeLogRequest struct {
 	Messages []LogEntry `thrift:"1,required" json:"messages"`
 }
 
-func (s *ScribeLogRequest) GetMessages() (val []LogEntry) {
-	if s != nil {
-		return s.Messages
+func (i *InternalRPCScribeLogRequest) GetMessages() (val []LogEntry) {
+	if i != nil {
+		return i.Messages
 	}
 
 	return
 }
 
-type ScribeLogResponse struct {
+type InternalRPCScribeLogResponse struct {
 	Value *ResultCode      `thrift:"0" json:"value,omitempty"`
 	F     *FailedException `thrift:"1" json:"f,omitempty"`
 }
 
-func (s *ScribeLogResponse) GetValue() (val ResultCode) {
-	if s != nil && s.Value != nil {
-		return *s.Value
+func (i *InternalRPCScribeLogResponse) GetValue() (val ResultCode) {
+	if i != nil && i.Value != nil {
+		return *i.Value
 	}
 
 	return
 }
 
-func (s *ScribeLogResponse) GetF() (val FailedException) {
-	if s != nil && s.F != nil {
-		return *s.F
+func (i *InternalRPCScribeLogResponse) GetF() (val FailedException) {
+	if i != nil && i.F != nil {
+		return *i.F
 	}
 
 	return
@@ -197,10 +197,10 @@ type ScribeClient struct {
 }
 
 func (s *ScribeClient) Echo(messages *LogEntry) (ret *LogEntry, err error) {
-	req := &ScribeEchoRequest{
+	req := &InternalRPCScribeEchoRequest{
 		Messages: messages,
 	}
-	res := &ScribeEchoResponse{}
+	res := &InternalRPCScribeEchoResponse{}
 	err = s.Client.Call("Echo", req, res)
 	if err == nil {
 		switch {
@@ -215,10 +215,10 @@ func (s *ScribeClient) Echo(messages *LogEntry) (ret *LogEntry, err error) {
 }
 
 func (s *ScribeClient) Log(messages []LogEntry) (ret *ResultCode, err error) {
-	req := &ScribeLogRequest{
+	req := &InternalRPCScribeLogRequest{
 		Messages: messages,
 	}
-	res := &ScribeLogResponse{}
+	res := &InternalRPCScribeLogResponse{}
 	err = s.Client.Call("Log", req, res)
 	if err == nil {
 		switch {
