@@ -521,7 +521,8 @@ func (g *GoGenerator) writeService(out io.Writer, svc *parser.Service) error {
 			g.write(out, "\t}\n")
 		}
 		if !isVoid {
-			if !g.Pointers && basicTypes[g.resolveType(method.ReturnType)] {
+			typ := g.resolveType(method.ReturnType)
+			if !g.Pointers && (basicTypes[typ] || g.thrift.Enums[typ] != nil) {
 				g.write(out, "\tres.Value = &val\n")
 			} else {
 				g.write(out, "\tres.Value = val\n")
@@ -603,7 +604,8 @@ func (g *GoGenerator) writeService(out io.Writer, svc *parser.Service) error {
 		}
 
 		if method.ReturnType != nil && method.ReturnType.Name != "void" {
-			if !g.Pointers && basicTypes[g.resolveType(method.ReturnType)] {
+			typ := g.resolveType(method.ReturnType)
+			if !g.Pointers && (basicTypes[typ] || g.thrift.Enums[typ] != nil) {
 				g.write(out, "\tif err == nil && res.Value != nil {\n\t ret = *res.Value\n}\n")
 			} else {
 				g.write(out, "\tif err == nil {\n\tret = res.Value\n}\n")
