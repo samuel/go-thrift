@@ -29,6 +29,7 @@ type Typedef struct {
 
 type EnumValue struct {
 	Pos         Pos
+	Comment     string
 	Name        string
 	Value       int
 	Annotations []*Annotation `json:",omitempty"`
@@ -36,20 +37,23 @@ type EnumValue struct {
 
 type Enum struct {
 	Pos         Pos
+	Comment     string
 	Name        string
 	Values      map[string]*EnumValue
 	Annotations []*Annotation `json:",omitempty"`
 }
 
 type Constant struct {
-	Pos   Pos
-	Name  string
-	Type  *Type
-	Value interface{}
+	Pos     Pos
+	Comment string
+	Name    string
+	Type    *Type
+	Value   interface{}
 }
 
 type Field struct {
 	Pos         Pos
+	Comment     string
 	ID          int
 	Name        string
 	Optional    bool
@@ -60,6 +64,7 @@ type Field struct {
 
 type Struct struct {
 	Pos         Pos
+	Comment     string
 	Name        string
 	Fields      []*Field
 	Annotations []*Annotation `json:",omitempty"`
@@ -78,6 +83,7 @@ type Method struct {
 
 type Service struct {
 	Pos         Pos
+	Comment     string
 	Name        string
 	Extends     string `json:",omitempty"`
 	Methods     map[string]*Method
