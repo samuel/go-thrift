@@ -68,15 +68,15 @@ One-way requests aren't yet implemented on the server side.
 Parser & Code Generator
 -----------------------
 
-The "parser" subdirectory contains a Thrift IDL parser, and "generator"
+The "parser" subdirectory contains a Thrift IDL parser, and "cmd/go-thrift"
 contains a Go code generator. It could be extended to include other
 languages.
 
 How to use the generator:
 
-    $ go install github.com/samuel/go-thrift/generator
+    $ github.com/alecthomas/go-thrift/cmd/go-thrift
 
-    $ generator --help
+    $ go-thrift --help
     Usage of generator:
       -go.binarystring
             Always use string for binary instead of []byte
@@ -89,7 +89,7 @@ How to use the generator:
       -go.signedbytes
             Interpret Thrift byte as Go signed int8 type
 
-    $ generator cassandra.thrift $GOPATH/src/
+    $ go-thrift cassandra.thrift $GOPATH/src/
 
 TODO
 ----
