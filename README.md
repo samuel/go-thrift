@@ -74,7 +74,7 @@ languages.
 
 How to use the generator:
 
-    $ github.com/alecthomas/go-thrift/cmd/go-thrift
+    $ go install github.com/alecthomas/go-thrift/cmd/go-thrift
 
     $ go-thrift --help
     Usage of generator:
