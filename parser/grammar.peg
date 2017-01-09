@@ -14,11 +14,22 @@ type namespace struct {
 	namespace string
 }
 
+var inTests = false
+
 type exception *Struct
 
 type union *Struct
 
 type include string
+
+func makePos(p position) Pos {
+	// This is not ideal, but otherwise we'd have to constantly update position information
+	// in the test tables whenever the test source fragments changed.
+	if inTests {
+		return Pos{}
+	}
+	return Pos{Line: p.line, Col: p.col}
+}
 
 func toIfaceSlice(v interface{}) []interface{} {
     if v == nil {
@@ -34,6 +45,60 @@ func ifaceSliceToString(v interface{}) string {
 		b[i] = v.([]uint8)[0]
 	}
 	return string(b)
+}
+
+func ifaceSliceToCommentString(v interface{}) string {
+        cps := v.([]interface{})
+        ccs := cps[1].([]interface{})
+        b := make([]byte, len(ccs))
+        for i, v := range ccs {
+                tmp := v.([]interface{})
+                b[i] = tmp[1].([]uint8)[0]
+        }
+        s := strings.Replace(string(b), "\n", "", -1)
+        return strings.TrimSpace(s)
+}
+
+func ifaceSliceToBlockCommentLineString(v interface{}) string {
+        cps := v.([]interface{})
+        ccs := cps[1].([]interface{})
+        b := make([]byte, len(ccs))
+        for i, v := range ccs {
+                tmp := v.([]interface{})
+                b[i] = tmp[1].([]uint8)[0]
+        }
+        s := strings.Replace(string(b), "\n", "", -1)
+        for {
+                sub := strings.TrimSpace(s)
+                sub = strings.TrimPrefix(sub, "*")
+                sub = strings.Replace(sub, "  * ", "", -1)
+                sub = strings.Replace(sub, " *", "", -1)
+                if sub == s {
+                        break
+                }
+                s = sub
+        }
+        return s
+}
+
+func ifaceSliceToBlockComment(v interface{}) string {
+        bcs := v.([]interface{})
+        coms := make([]string, len(bcs))
+        for i, b := range bcs {
+                if reflect.TypeOf(b) != reflect.TypeOf([]uint8{}) {
+                        bps := b.([]interface{})
+                        if len(bps) > 0 && bps[1] != nil {
+                                coms[i] = ifaceSliceToBlockCommentLineString(bps[1])
+                        } else {
+                                coms[i] = ""
+                        }
+                }
+        }
+        s := strings.Join(coms, " ")
+        s = strings.TrimSpace(s)
+        s = strings.TrimPrefix(s, "*")
+        s = strings.TrimSpace(s)
+        return s
 }
 
 // toStruct converts a union to a struct with all fields optional.
@@ -53,7 +118,7 @@ func toAnnotations(v interface{}) []*Annotation {
 }
 }
 
-Grammar ← __ statements:( Statement __ )* (EOF / SyntaxError) {
+Grammar ← _ statements:( Statement )* __ (EOF / SyntaxError) {
 	thrift := &Thrift{
 		Includes: make(map[string]string),
 		Namespaces: make(map[string]string),
@@ -67,7 +132,7 @@ Grammar ← __ statements:( Statement __ )* (EOF / SyntaxError) {
 	}
 	stmts := toIfaceSlice(statements)
 	for _, st := range stmts {
-		switch v := st.([]interface{})[0].(type) {
+		switch v := st.(type) {
 		case *namespace:
 			thrift.Namespaces[v.scope] = v.namespace
 		case *Constant:
@@ -101,30 +166,42 @@ SyntaxError ← . {
 	return nil, errors.New("parser: syntax error")
 }
 
-Include ← "include" _ file:Literal EOS {
+Include ← blockComment:(_ Comment? EOL)* _ "include" _ file:Literal (Whitespace / EOL)* {
 	return include(file.(string)), nil
 }
 
 Statement ← Include / Namespace / Const / Enum / TypeDef / Struct / Exception / Union / Service
 
-Namespace ← "namespace" _ scope:[*a-z.-]+ _ ns:Identifier EOS {
+Namespace ← blockComment:(_ Comment? EOL)* _ "namespace" _ scope:[*a-z.-]+ _ ns:Identifier (Whitespace / EOL)* {
 	return &namespace{
 		scope: ifaceSliceToString(scope),
 		namespace: string(ns.(Identifier)),
 	}, nil
 }
 
-Const ← "const" _ typ:FieldType _ name:Identifier __ "=" __ value:ConstValue EOS {
-	return &Constant{
+Const ← blockComment:(_ Comment? EOL)* _ "const" _ typ:FieldType _ name:Identifier __ "=" __ value:ConstValue ListSeparator? _ comment:Comment? (Whitespace / EOL)* {
+	con := &Constant{
+		Pos: makePos(c.pos),
 		Name: string(name.(Identifier)),
 		Type: typ.(*Type),
 		Value: value,
-	}, nil
+	}
+	if comment != nil {
+		con.Comment = ifaceSliceToCommentString(comment)
+	}
+        if blockComment != nil {
+                bc := ifaceSliceToBlockComment(blockComment)
+                if bc != "" {
+                        con.Comment = bc
+                }
+        }
+	return con, nil
 }
 
-Enum ← "enum" _ name:Identifier __ '{' __ values:(EnumValue __)* '}' _ annotations:TypeAnnotations? EOS {
+Enum ← blockComment:(_ Comment? EOL)* _ "enum" _ name:Identifier __ '{' (Whitespace / EOL)* values:EnumValue* __'}' _ annotations:TypeAnnotations? ListSeparator? (Whitespace / EOL)* {
 	vs := toIfaceSlice(values)
 	en := &Enum{
+		Pos: makePos(c.pos),
 		Name: string(name.(Identifier)),
 		Values: make(map[string]*EnumValue, len(vs)),
 		Annotations: toAnnotations(annotations),
@@ -134,7 +211,7 @@ Enum ← "enum" _ name:Identifier __ '{' __ values:(EnumValue __)* '}' _ annotat
 	// thing to do.
 	next := 0
 	for _, v := range vs {
-		ev := v.([]interface{})[0].(*EnumValue)
+		ev := v.(*EnumValue)
 		if ev.Value < 0 {
 			ev.Value = next
 		}
@@ -143,11 +220,18 @@ Enum ← "enum" _ name:Identifier __ '{' __ values:(EnumValue __)* '}' _ annotat
 		}
 		en.Values[ev.Name] = ev
 	}
+	if blockComment != nil {
+                bc := ifaceSliceToBlockComment(blockComment)
+                if bc != "" {
+                        en.Comment = bc
+                }
+	}
 	return en, nil
 }
 
-EnumValue ← name:Identifier _ value:('=' _ IntConstant)? _ annotations:TypeAnnotations? ListSeparator? {
+EnumValue ← blockComment:(_ Comment? EOL)* _ name:Identifier _ value:('=' _ IntConstant)? _ annotations:TypeAnnotations? ListSeparator? _ comment:Comment? {
 	ev := &EnumValue{
+		Pos: makePos(c.pos),
 		Name: string(name.(Identifier)),
 		Value: -1,
 		Annotations: toAnnotations(annotations),
@@ -155,22 +239,63 @@ EnumValue ← name:Identifier _ value:('=' _ IntConstant)? _ annotations:TypeAnn
 	if value != nil {
 		ev.Value = int(value.([]interface{})[2].(int64))
 	}
+        if comment != nil {
+                ev.Comment = ifaceSliceToCommentString(comment)
+        }
+        if blockComment != nil {
+                bc := ifaceSliceToBlockComment(blockComment)
+                if bc != "" {
+                        ev.Comment = bc
+                }
+        }
 	return ev, nil
 }
 
-TypeDef ← "typedef" _ typ:FieldType _ name:Identifier _ annotations:TypeAnnotations? EOS {
+TypeDef ← blockComment:(_ Comment? EOL)* _ "typedef" _ typ:FieldType _ name:Identifier _ annotations:TypeAnnotations? ListSeparator? (Whitespace / EOL)* {
 	return &Typedef{
+		Pos: makePos(c.pos),
 		Type: typ.(*Type),
 		Alias: string(name.(Identifier)),
 		Annotations: toAnnotations(annotations),
 	}, nil
 }
 
-Struct ← "struct" _ st:StructLike { return st.(*Struct), nil }
-Exception ← "exception" _ st:StructLike { return exception(st.(*Struct)), nil }
-Union ← "union" _ st:StructLike { return union(st.(*Struct)), nil }
-StructLike ← name:Identifier __ '{' __ fields:FieldList '}' _ annotations:TypeAnnotations? EOS {
+Struct ← blockComment:(_ Comment? EOL)* _ "struct" _ st:StructLike {
+        stc := st.(*Struct)
+        if blockComment != nil {
+                bc := ifaceSliceToBlockComment(blockComment)
+                if bc != "" {
+                        stc.Comment = bc
+                }
+        }
+        return stc, nil
+}
+
+Exception ← blockComment:(_ Comment? EOL)* _ "exception" _ st:StructLike {
+        stc := st.(*Struct)
+        if blockComment != nil {
+                bc := ifaceSliceToBlockComment(blockComment)
+                if bc != "" {
+                        stc.Comment = bc
+                }
+        }
+        return exception(stc), nil
+}
+
+Union ← blockComment:(_ Comment? EOL)* _ "union" _ st:StructLike {
+        stc := st.(*Struct)
+        if blockComment != nil {
+                bc := ifaceSliceToBlockComment(blockComment)
+                if bc != "" {
+                        stc.Comment = bc
+                }
+        }
+        return union(stc), nil
+}
+
+StructLike ← name:Identifier __ '{' (Whitespace / EOL)* fields:FieldList __'}' _ annotations:TypeAnnotations? ListSeparator? (Whitespace / EOL)* {
 	st := &Struct{
+		Pos: makePos(c.pos),
 		Name: string(name.(Identifier)),
 		Annotations: toAnnotations(annotations),
 	}
@@ -180,7 +305,7 @@ StructLike ← name:Identifier __ '{' __ fields:FieldList '}' _ annotations:Type
 	return st, nil
 }
 
-FieldList ← fields:(Field __)* {
+FieldList ← fields:(Field (Whitespace / EOL)*)* {
 	fs := fields.([]interface{})
 	flds := make([]*Field, len(fs))
 	for i, f := range fs {
@@ -189,8 +314,9 @@ FieldList ← fields:(Field __)* {
 	return flds, nil
 }
 
-Field ← id:IntConstant _ ':' _ req:FieldReq? _ typ:FieldType _ name:Identifier __ def:('=' _ ConstValue)? _ annotations:TypeAnnotations? ListSeparator? {
+Field ← blockComment:(_ Comment? EOL)* _ id:IntConstant _ ':' _ req:FieldReq? _ typ:FieldType _ name:Identifier __ def:('=' _ ConstValue)? _ annotations:TypeAnnotations? ListSeparator? _ comment:Comment? {
 	f := &Field{
+		Pos      : makePos(c.pos),
 		ID       : int(id.(int64)),
 		Name     : string(name.(Identifier)),
 		Type     : typ.(*Type),
@@ -202,6 +328,15 @@ Field ← id:IntConstant _ ':' _ req:FieldReq? _ typ:FieldType _ name:Identifier
 	if def != nil {
 		f.Default = def.([]interface{})[2]
 	}
+	if comment != nil {
+		f.Comment = ifaceSliceToCommentString(comment)
+	}
+	if blockComment != nil {
+	        bc := ifaceSliceToBlockComment(blockComment)
+	        if bc != "" {
+	                f.Comment = bc
+                }
+	}
 	return f, nil
 }
 
@@ -209,9 +344,10 @@ FieldReq ← ("required" / "optional") {
 	return !bytes.Equal(c.text, []byte("optional")), nil
 }
 
-Service ← "service" _ name:Identifier _ extends:("extends" __ Identifier __)? __ '{' __ methods:(Function __)* ('}' / EndOfServiceError) _ annotations:TypeAnnotations?  EOS {
+Service ← blockComment:(_ Comment? EOL)* _ "service" _ name:Identifier _ extends:("extends" __ Identifier __)? __ '{' methods:(Function)* __ ('}' / EndOfServiceError) _ annotations:TypeAnnotations? ListSeparator? (Whitespace / EOL)* {
 	ms := methods.([]interface{})
 	svc := &Service{
+		Pos: makePos(c.pos),
 		Name: string(name.(Identifier)),
 		Methods: make(map[string]*Method, len(ms)),
 		Annotations: toAnnotations(annotations),
@@ -220,17 +356,24 @@ Service ← "service" _ name:Identifier _ extends:("extends" __ Identifier __)? 
 		svc.Extends = string(extends.([]interface{})[2].(Identifier))
 	}
 	for _, m := range ms {
-		mt :=  m.([]interface{})[0].(*Method)
+		mt :=  m.(*Method)
 		svc.Methods[mt.Name] = mt
 	}
+        if blockComment != nil {
+                bc := ifaceSliceToBlockComment(blockComment)
+                if bc != "" {
+                        svc.Comment = bc
+                }
+        }
 	return svc, nil
 }
 EndOfServiceError ← . {
 	return nil, errors.New("parser: expected end of service")
 }
 
-Function ← oneway:("oneway" __)? typ:FunctionType __ name:Identifier _ '(' __ arguments:FieldList ')' __ exceptions:Throws? _ annotations:TypeAnnotations? ListSeparator? {
+Function ← blockComment:(_ Comment? EOL)* _ oneway:("oneway" __)? typ:FunctionType __ name:Identifier _ '(' __ arguments:FieldList ')' __ exceptions:Throws? _ annotations:TypeAnnotations? ListSeparator? _ comment:Comment? {
 	m := &Method{
+		Pos: makePos(c.pos),
 		Name: string(name.(Identifier)),
 		Annotations: toAnnotations(annotations),
 	}
@@ -250,6 +393,15 @@ Function ← oneway:("oneway" __)? typ:FunctionType __ name:Identifier _ '(' __ 
 			e.Optional = true
 		}
 	}
+        if comment != nil {
+                m.Comment = ifaceSliceToCommentString(comment)
+        }
+        if blockComment != nil {
+                bc := ifaceSliceToBlockComment(blockComment)
+                if bc != "" {
+                        m.Comment = bc
+                }
+        }
 	return m, nil
 }
 
@@ -257,7 +409,10 @@ FunctionType ← typ:("void" / FieldType) {
 	if t, ok := typ.(*Type); ok {
 		return t, nil
 	}
-	return &Type{Name: string(c.text)}, nil
+	return &Type{
+		Pos: makePos(c.pos),
+		Name: string(c.text),
+	}, nil
 }
 
 Throws ← "throws" __ '(' __ exceptions:FieldList ')' {
@@ -266,7 +421,10 @@ Throws ← "throws" __ '(' __ exceptions:FieldList ')' {
 
 FieldType ← typ:(BaseType / ContainerType / Identifier) {
 	if t, ok := typ.(Identifier); ok {
-		return &Type{Name: string(t)}, nil
+		return &Type{
+			Pos: makePos(c.pos),
+			Name: string(t),
+		}, nil
 	}
 	return typ, nil
 }
@@ -277,6 +435,7 @@ DefinitionType ← typ:(BaseType / ContainerType) {
 
 BaseType ← name:BaseTypeName _ annotations:TypeAnnotations? {
 	return &Type{
+		Pos: makePos(c.pos),
 		Name: name.(string),
 		Annotations: toAnnotations(annotations),
 	}, nil
@@ -292,6 +451,7 @@ ContainerType ← typ:(MapType / SetType / ListType) {
 
 MapType ← CppType? "map" WS "<" WS key:FieldType WS "," WS value:FieldType WS ">" _ annotations:TypeAnnotations? {
 	return &Type{
+		Pos: makePos(c.pos),
 		Name: "map",
 		KeyType: key.(*Type),
 		ValueType: value.(*Type),
@@ -301,6 +461,7 @@ MapType ← CppType? "map" WS "<" WS key:FieldType WS "," WS value:FieldType WS 
 
 SetType ← CppType? "set" WS "<" WS typ:FieldType WS ">" _ annotations:TypeAnnotations? {
 	return &Type{
+		Pos: makePos(c.pos),
 		Name: "set",
 		ValueType: typ.(*Type),
 		Annotations: toAnnotations(annotations),
@@ -309,6 +470,7 @@ SetType ← CppType? "set" WS "<" WS typ:FieldType WS ">" _ annotations:TypeAnno
 
 ListType ← "list" WS "<" WS typ:FieldType WS ">" _ annotations:TypeAnnotations? {
 	return &Type{
+		Pos: makePos(c.pos),
 		Name: "list",
 		ValueType: typ.(*Type),
 		Annotations: toAnnotations(annotations),
@@ -335,7 +497,8 @@ TypeAnnotation ← name:Identifier _ value:('=' __ value:Literal { return value,
 		optValue = value.(string)
 	}
 	return &Annotation{
-	  Name: string(name.(Identifier)),
+		Pos: makePos(c.pos),
+		Name: string(name.(Identifier)),
 		Value: optValue,
 	}, nil
 }
@@ -392,7 +555,7 @@ Digit ← [0-9]
 
 SourceChar ← .
 Comment ← MultiLineComment / SingleLineComment
-MultiLineComment ← "/*" ( !"*/" SourceChar )* "*/"
+MultiLineComment ← ("/*" / "/**") ( !("*/" / "**/") SourceChar )* ("*/" / "**/")
 MultiLineCommentNoLineTerminator ← "/*" ( !( "*/" / EOL ) SourceChar )* "*/"
 SingleLineComment ← ("//" ( !EOL SourceChar )*) / ("#" ( !EOL SourceChar )*)
 

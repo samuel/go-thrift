@@ -13,6 +13,10 @@ import (
 	"testing"
 )
 
+func init() {
+	inTests = true
+}
+
 func TestServiceParsing(t *testing.T) {
 	thrift, err := parse(`
 		include "other.thrift"
@@ -283,21 +287,21 @@ typedef set<string> (a1 = "v1") setT (a2="v2")
 			Type: &Type{
 				Name: "i64",
 				Annotations: []*Annotation{
-					{"ann1", "a1"},
-					{"ann2", "a2"},
-					{"js.type", "Long"},
+					{Name: "ann1", Value: "a1"},
+					{Name: "ann2", Value: "a2"},
+					{Name: "js.type", Value: "Long"},
 				},
 			},
-			Annotations: []*Annotation{{"tAnn1", "tv1"}},
+			Annotations: []*Annotation{{Name: "tAnn1", Value: "tv1"}},
 		},
 		"listT": &Typedef{
 			Alias: "listT",
 			Type: &Type{
 				Name:        "list",
 				ValueType:   &Type{Name: "string"},
-				Annotations: []*Annotation{{"a1", "v1"}},
+				Annotations: []*Annotation{{Name: "a1", Value: "v1"}},
 			},
-			Annotations: []*Annotation{{"a2", "v2"}},
+			Annotations: []*Annotation{{Name: "a2", Value: "v2"}},
 		},
 		"mapT": &Typedef{
 			Alias: "mapT",
@@ -305,18 +309,18 @@ typedef set<string> (a1 = "v1") setT (a2="v2")
 				Name:        "map",
 				KeyType:     &Type{Name: "string"},
 				ValueType:   &Type{Name: "i64"},
-				Annotations: []*Annotation{{"a1", "v1"}},
+				Annotations: []*Annotation{{Name: "a1", Value: "v1"}},
 			},
-			Annotations: []*Annotation{{"a2", "v2"}},
+			Annotations: []*Annotation{{Name: "a2", Value: "v2"}},
 		},
 		"setT": &Typedef{
 			Alias: "setT",
 			Type: &Type{
 				Name:        "set",
 				ValueType:   &Type{Name: "string"},
-				Annotations: []*Annotation{{"a1", "v1"}},
+				Annotations: []*Annotation{{Name: "a1", Value: "v1"}},
 			},
-			Annotations: []*Annotation{{"a2", "v2"}},
+			Annotations: []*Annotation{{Name: "a2", Value: "v2"}},
 		},
 	}
 	if got := thrift.Typedefs; !reflect.DeepEqual(expected, got) {
@@ -343,20 +347,20 @@ func TestParseEnumAnnotations(t *testing.T) {
 				"ONE": &EnumValue{
 					Name:        "ONE",
 					Value:       0,
-					Annotations: []*Annotation{{"a1", "v1"}},
+					Annotations: []*Annotation{{Name: "a1", Value: "v1"}},
 				},
 				"TWO": &EnumValue{
 					Name:        "TWO",
 					Value:       2,
-					Annotations: []*Annotation{{"a2", "v2"}},
+					Annotations: []*Annotation{{Name: "a2", Value: "v2"}},
 				},
 				"THREE": &EnumValue{
 					Name:        "THREE",
 					Value:       3,
-					Annotations: []*Annotation{{"a3", "v3"}},
+					Annotations: []*Annotation{{Name: "a3", Value: "v3"}},
 				},
 			},
-			Annotations: []*Annotation{{"a4", "v4"}},
+			Annotations: []*Annotation{{Name: "a4", Value: "v4"}},
 		},
 	}
 	if got := thrift.Enums; !reflect.DeepEqual(expected, got) {
@@ -383,7 +387,7 @@ func TestParseFieldAnnotations(t *testing.T) {
 					Name:        "f1",
 					Optional:    true,
 					Type:        &Type{Name: "i32"},
-					Annotations: []*Annotation{{"a1", "v1"}},
+					Annotations: []*Annotation{{Name: "a1", Value: "v1"}},
 				},
 			},
 		},
@@ -432,21 +436,21 @@ func TestParseStructLikeAnnotations(t *testing.T) {
 		"S": &Struct{
 			Name:        "S",
 			Fields:      fields,
-			Annotations: []*Annotation{{"a1", "v1"}},
+			Annotations: []*Annotation{{Name: "a1", Value: "v1"}},
 		},
 	}
 	expected.Unions = map[string]*Struct{
 		"U": &Struct{
 			Name:        "U",
 			Fields:      fields,
-			Annotations: []*Annotation{{"a2", "v2"}},
+			Annotations: []*Annotation{{Name: "a2", Value: "v2"}},
 		},
 	}
 	expected.Exceptions = map[string]*Struct{
 		"E": &Struct{
 			Name:        "E",
 			Fields:      fields,
-			Annotations: []*Annotation{{"a3", "v3"}},
+			Annotations: []*Annotation{{Name: "a3", Value: "v3"}},
 		},
 	}
 	if !reflect.DeepEqual(expected, thrift) {
@@ -477,10 +481,10 @@ func TestParseServiceAnnotations(t *testing.T) {
 							Type: &Type{Name: "i32"},
 						},
 					},
-					Annotations: []*Annotation{{"a1", "v1"}},
+					Annotations: []*Annotation{{Name: "a1", Value: "v1"}},
 				},
 			},
-			Annotations: []*Annotation{{"a2", "v2"}},
+			Annotations: []*Annotation{{Name: "a2", Value: "v2"}},
 		},
 	}
 	if got := thrift.Services; !reflect.DeepEqual(expected, got) {

@@ -6,89 +6,113 @@ package parser
 
 import "fmt"
 
+type Pos struct {
+	Line int
+	Col  int
+}
+
 type Type struct {
-	Name        string
-	KeyType     *Type // If map
-	ValueType   *Type // If map, list, or set
-	Annotations []*Annotation
+	Pos         Pos
+	Name        string        `json:",omitempty"`
+	KeyType     *Type         `json:",omitempty"` // If map
+	ValueType   *Type         `json:",omitempty"` // If map, list, or set
+	Annotations []*Annotation `json:",omitempty"`
 }
 
 type Typedef struct {
 	*Type
 
+	Pos         Pos
 	Alias       string
-	Annotations []*Annotation
+	Annotations []*Annotation `json:",omitempty"`
 }
 
 type EnumValue struct {
+	Pos         Pos
+	Comment     string
 	Name        string
 	Value       int
-	Annotations []*Annotation
+	Annotations []*Annotation `json:",omitempty"`
 }
 
 type Enum struct {
+	Pos         Pos
+	Comment     string
 	Name        string
 	Values      map[string]*EnumValue
-	Annotations []*Annotation
+	Annotations []*Annotation `json:",omitempty"`
 }
 
 type Constant struct {
-	Name  string
-	Type  *Type
-	Value interface{}
+	Pos     Pos
+	Comment string
+	Name    string
+	Type    *Type
+	Value   interface{}
 }
 
 type Field struct {
+	Pos         Pos
+	Comment     string
 	ID          int
 	Name        string
 	Optional    bool
 	Type        *Type
-	Default     interface{}
-	Annotations []*Annotation
+	Default     interface{}   `json:",omitempty"`
+	Annotations []*Annotation `json:",omitempty"`
 }
 
 type Struct struct {
+	Pos         Pos
+	Comment     string
 	Name        string
 	Fields      []*Field
-	Annotations []*Annotation
+	Annotations []*Annotation `json:",omitempty"`
 }
 
 type Method struct {
+	Pos         Pos
 	Comment     string
 	Name        string
 	Oneway      bool
 	ReturnType  *Type
 	Arguments   []*Field
-	Exceptions  []*Field
-	Annotations []*Annotation
+	Exceptions  []*Field      `json:",omitempty"`
+	Annotations []*Annotation `json:",omitempty"`
 }
 
 type Service struct {
+	Pos         Pos
+	Comment     string
 	Name        string
-	Extends     string
+	Extends     string `json:",omitempty"`
 	Methods     map[string]*Method
-	Annotations []*Annotation
+	Annotations []*Annotation `json:",omitempty"`
 }
 
 type Thrift struct {
-	Includes   map[string]string // name -> unique identifier (absolute path generally)
-	Typedefs   map[string]*Typedef
-	Namespaces map[string]string
-	Constants  map[string]*Constant
-	Enums      map[string]*Enum
-	Structs    map[string]*Struct
-	Exceptions map[string]*Struct
-	Unions     map[string]*Struct
-	Services   map[string]*Service
+	Filename   string
+	Includes   map[string]string    `json:",omitempty"` // name -> unique identifier (absolute path generally)
+	Imports    map[string]*Thrift   `json:",omitempty"` // name -> imported file
+	Typedefs   map[string]*Typedef  `json:",omitempty"`
+	Namespaces map[string]string    `json:",omitempty"`
+	Constants  map[string]*Constant `json:",omitempty"`
+	Enums      map[string]*Enum     `json:",omitempty"`
+	Structs    map[string]*Struct   `json:",omitempty"`
+	Exceptions map[string]*Struct   `json:",omitempty"`
+	Unions     map[string]*Struct   `json:",omitempty"`
+	Services   map[string]*Service  `json:",omitempty"`
 }
 
 type Identifier string
 
 type KeyValue struct {
-	Key, Value interface{}
+	Key   interface{}
+	Value interface{}
 }
 
 type Annotation struct {
+	Pos   Pos
 	Name  string
 	Value string
 }

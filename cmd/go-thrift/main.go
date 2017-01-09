@@ -13,8 +13,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/samuel/go-thrift/parser"
-	"github.com/samuel/go-thrift/thrift"
+	"github.com/alecthomas/go-thrift/parser"
+	"github.com/alecthomas/go-thrift/thrift"
 )
 
 func camelCase(st string) string {
@@ -79,7 +79,7 @@ func main() {
 	filename := flag.Arg(0)
 	outpath := flag.Arg(1)
 
-	p := &parser.Parser{}
+	p := parser.New()
 	parsedThrift, _, err := p.ParseFile(filename)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%s\n", err.Error())

@@ -16,11 +16,19 @@ import (
 
 type Filesystem interface {
 	Open(filename string) (io.ReadCloser, error)
-	Abs(path string) (string, error)
+	// Abs makes "path" absolute, when relative to the directory "dir".
+	Abs(dir, path string) (string, error)
 }
 
 type Parser struct {
 	Filesystem Filesystem // For handling includes. Can be set to nil to fall back to os package.
+	Files      map[string]*Thrift
+}
+
+func New() *Parser {
+	return &Parser{
+		Files: map[string]*Thrift{},
+	}
 }
 
 func (p *Parser) Parse(r io.Reader, opts ...Option) (*Thrift, error) {
@@ -32,36 +40,40 @@ func (p *Parser) Parse(r io.Reader, opts ...Option) (*Thrift, error) {
 	if named, ok := r.(namedReader); ok {
 		name = named.Name()
 	}
-	t, err := Parse(name, b, opts...)
+	i, err := Parse(name, b, opts...)
 	if err != nil {
 		return nil, err
 	}
-	return t.(*Thrift), nil
+	t := i.(*Thrift)
+	t.Filename = name
+	return t, nil
 }
 
 func (p *Parser) ParseFile(filename string) (map[string]*Thrift, string, error) {
-	files := make(map[string]*Thrift)
-
-	absPath, err := p.abs(filename)
+	absPath, err := p.abs("", filename)
 	if err != nil {
 		return nil, "", err
 	}
 
 	path := absPath
 	for path != "" {
+		if _, ok := p.Files[path]; ok {
+			break
+		}
 		rd, err := p.open(path)
 		if err != nil {
 			return nil, "", err
 		}
 		thrift, err := p.Parse(rd)
+		rd.Close()
 		if err != nil {
 			return nil, "", err
 		}
-		files[path] = thrift
+		p.Files[path] = thrift
 
 		basePath := filepath.Dir(path)
 		for incName, incPath := range thrift.Includes {
-			p, err := p.abs(filepath.Join(basePath, incPath))
+			p, err := p.abs(basePath, incPath)
 			if err != nil {
 				return nil, "", err
 			}
@@ -70,9 +82,9 @@ func (p *Parser) ParseFile(filename string) (map[string]*Thrift, string, error) 
 
 		// Find path for next unparsed include
 		path = ""
-		for _, th := range files {
+		for _, th := range p.Files {
 			for _, incPath := range th.Includes {
-				if files[incPath] == nil {
+				if p.Files[incPath] == nil {
 					path = incPath
 					break
 				}
@@ -80,7 +92,7 @@ func (p *Parser) ParseFile(filename string) (map[string]*Thrift, string, error) 
 		}
 	}
 
-	return files, absPath, nil
+	return p.Files, absPath, nil
 }
 
 func (p *Parser) open(path string) (io.ReadCloser, error) {
@@ -90,15 +102,15 @@ func (p *Parser) open(path string) (io.ReadCloser, error) {
 	return p.Filesystem.Open(path)
 }
 
-func (p *Parser) abs(path string) (string, error) {
+func (p *Parser) abs(dir, path string) (string, error) {
 	if p.Filesystem == nil {
-		absPath, err := filepath.Abs(path)
+		absPath, err := filepath.Abs(filepath.Join(dir, path))
 		if err != nil {
 			return "", err
 		}
 		return filepath.Clean(absPath), nil
 	}
-	return p.Filesystem.Abs(path)
+	return p.Filesystem.Abs(dir, path)
 }
 
 type namedReader interface {

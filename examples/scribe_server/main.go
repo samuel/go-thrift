@@ -5,8 +5,8 @@ import (
 	"net"
 	"net/rpc"
 
-	"github.com/samuel/go-thrift/examples/scribe"
-	"github.com/samuel/go-thrift/thrift"
+	"github.com/alecthomas/go-thrift/examples/scribe"
+	"github.com/alecthomas/go-thrift/thrift"
 )
 
 // implementation
