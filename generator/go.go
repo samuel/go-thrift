@@ -257,13 +257,17 @@ func (g *GoGenerator) resolveType(typ *parser.Type) string {
 func (g *GoGenerator) formatField(field *parser.Field) string {
 	tags := ""
 	jsonTags := ""
-	if !field.Optional {
+	if field.Required {
 		tags = ",required"
 	} else {
+		tags = ",optional"
 		jsonTags = ",omitempty"
 	}
+	if !field.Explicit {
+		tags += ",implicit"
+	}
 	var opt typeOption
-	if field.Optional {
+	if !field.Required {
 		opt |= toOptional
 	}
 	return fmt.Sprintf(
@@ -275,7 +279,7 @@ func (g *GoGenerator) formatArguments(arguments []*parser.Field) string {
 	args := make([]string, len(arguments))
 	for i, arg := range arguments {
 		var opt typeOption
-		if arg.Optional {
+		if !arg.Required {
 			opt |= toOptional
 		}
 		args[i] = fmt.Sprintf("%s %s", validGoIdent(lowerCamelCase(arg.Name)), g.formatType(g.pkg, g.thrift, arg.Type, opt))
@@ -544,7 +548,7 @@ func (g *GoGenerator) writeService(out io.Writer, svc *parser.Service) error {
 			// Response struct
 			args := make([]*parser.Field, 0, len(method.Exceptions))
 			if method.ReturnType != nil && method.ReturnType.Name != "void" {
-				args = append(args, &parser.Field{ID: 0, Name: "value", Optional: true /*len(method.Exceptions) != 0*/, Type: method.ReturnType, Default: nil})
+				args = append(args, &parser.Field{ID: 0, Name: "value", Required: false /*len(method.Exceptions) != 0*/, Type: method.ReturnType, Default: nil})
 			}
 			for _, ex := range method.Exceptions {
 				args = append(args, ex)

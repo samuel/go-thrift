@@ -195,6 +195,7 @@ type encodeField struct {
 	i         int // field index in struct
 	id        int
 	required  bool
+	explicit  bool
 	keepEmpty bool
 	fieldType byte
 	name      string
@@ -259,6 +260,7 @@ func encodeFields(t reflect.Type) structMeta {
 			ef.id = id
 			ef.name = f.Name
 			ef.required = opts.Contains("required")
+			ef.explicit = !opts.Contains("implicit")
 			if ef.required {
 				m.required |= 1 << byte(id)
 			}

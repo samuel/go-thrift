@@ -175,7 +175,7 @@ func (d *decoder) readValue(thriftType byte, rf reflect.Value) {
 
 		if req != 0 {
 			for i := 0; req != 0; i, req = i+1, req>>1 {
-				if req&1 != 0 {
+				if req&1 != 0 && meta.fields[i].explicit {
 					d.error(&MissingRequiredField{
 						StructName: v.Type().Name(),
 						FieldName:  meta.fields[i].name,

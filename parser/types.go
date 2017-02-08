@@ -41,7 +41,8 @@ type Constant struct {
 type Field struct {
 	ID          int
 	Name        string
-	Optional    bool
+	Required    bool
+	Explicit    bool
 	Type        *Type
 	Default     interface{}
 	Annotations []*Annotation
