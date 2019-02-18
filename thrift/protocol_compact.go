@@ -125,7 +125,7 @@ func (p *compactProtocolWriter) writeUvarint(value uint64) (err error) {
 	return
 }
 
-// Write a message header to the wire. Compact Protocol messages contain the
+// WriteMessageBegin writes a message header to the wire. Compact Protocol messages contain the
 // protocol version so we can migrate forwards in the future if need be.
 func (p *compactProtocolWriter) WriteMessageBegin(name string, messageType byte, seqid int32) (err error) {
 	if err = p.writeByteDirect(compactProtocolID); err != nil {
@@ -141,7 +141,7 @@ func (p *compactProtocolWriter) WriteMessageBegin(name string, messageType byte,
 	return
 }
 
-// Write a struct begin. This doesn't actually put anything on the wire. We
+// WriteStructBegin writes a struct begin. This doesn't actually put anything on the wire. We
 // use it as an opportunity to put special placeholder markers on the field
 // stack so we can get the field id deltas correct.
 func (p *compactProtocolWriter) WriteStructBegin(name string) error {
@@ -150,7 +150,7 @@ func (p *compactProtocolWriter) WriteStructBegin(name string) error {
 	return nil
 }
 
-// Write a struct end. This doesn't actually put anything on the wire. We use
+// WriteStructEnd writes a struct end. This doesn't actually put anything on the wire. We use
 // this as an opportunity to pop the last field from the current struct off
 // of the field stack.
 func (p *compactProtocolWriter) WriteStructEnd() error {
@@ -163,7 +163,7 @@ func (p *compactProtocolWriter) WriteStructEnd() error {
 	return nil
 }
 
-// Write a field header containing the field id and field type. If the
+// WriteFieldBegin writes a field header containing the field id and field type. If the
 // difference between the current field id and the last one is small (< 15),
 // then the field id will be encoded in the 4 MSB as a delta. Otherwise, the
 // field id will follow the type header as a zigzag varint.
@@ -206,12 +206,12 @@ func (p *compactProtocolWriter) writeFieldBeginInternal(name string, fieldType b
 	return nil
 }
 
-// Write the STOP symbol so we know there are no more fields in this struct.
+// WriteFieldStop writes the STOP symbol so we know there are no more fields in this struct.
 func (p *compactProtocolWriter) WriteFieldStop() error {
 	return p.writeByteDirect(TypeStop)
 }
 
-// Write a map header. If the map is empty, omit the key and value type
+// WriteMapBegin writes a map header. If the map is empty, omit the key and value type
 // headers, as we don't need any additional information to skip it.
 func (p *compactProtocolWriter) WriteMapBegin(keyType byte, valueType byte, size int) error {
 	if size == 0 {
@@ -223,17 +223,17 @@ func (p *compactProtocolWriter) WriteMapBegin(keyType byte, valueType byte, size
 	return p.writeByteDirect(byte(thriftTypeToCompactType[keyType]<<4 | thriftTypeToCompactType[valueType]))
 }
 
-// Write a list header.
+// WriteListBegin writes a list header.
 func (p *compactProtocolWriter) WriteListBegin(elementType byte, size int) error {
 	return p.writeCollectionBegin(elementType, size)
 }
 
-// Write a set header.
+// WriteSetBegin writes a set header.
 func (p *compactProtocolWriter) WriteSetBegin(elementType byte, size int) error {
 	return p.writeCollectionBegin(elementType, size)
 }
 
-// Write a boolean value. Potentially, this could be a boolean field, in
+// WriteBool writes a boolean value. Potentially, this could be a boolean field, in
 // which case the field header info isn't written yet. If so, decide what the
 // right type header is for the value and then write the field header.
 // Otherwise, write a single byte.
@@ -272,12 +272,12 @@ func (p *compactProtocolWriter) WriteDouble(value float64) (err error) {
 	return
 }
 
-// Write a string to the wire with a varint size preceeding.
+// WriteString writes a string to the wire with a varint size preceeding.
 func (p *compactProtocolWriter) WriteString(value string) error {
 	return p.WriteBytes([]byte(value))
 }
 
-// Write a byte array, using a varint for the size.
+// WriteBytes writes a byte array, using a varint for the size.
 func (p *compactProtocolWriter) WriteBytes(value []byte) error {
 	if err := p.writeUvarint(uint64(len(value))); err != nil {
 		return err
@@ -398,7 +398,7 @@ func (p *compactProtocolReader) ReadMessageBegin() (string, byte, int32, error) 
 	return msgName, msgType, int32(seqID), nil
 }
 
-// Read a struct begin. There's nothing on the wire for this, but it is our
+// ReadStructBegin reads a struct begin. There's nothing on the wire for this, but it is our
 // opportunity to push a new struct begin marker onto the field stack.
 func (p *compactProtocolReader) ReadStructBegin() error {
 	p.structs = append(p.structs, p.lastFieldID)
@@ -406,7 +406,7 @@ func (p *compactProtocolReader) ReadStructBegin() error {
 	return nil
 }
 
-// Doesn't actually consume any wire data, just removes the last field for
+// ReadStructEnd Doesn't actually consume any wire data, just removes the last field for
 // this struct from the field stack.
 func (p *compactProtocolReader) ReadStructEnd() error {
 	// consume the last field we read off the wire
@@ -415,7 +415,7 @@ func (p *compactProtocolReader) ReadStructEnd() error {
 	return nil
 }
 
-// Read a field header off the wire.
+// ReadFieldBegin reads a field header off the wire.
 func (p *compactProtocolReader) ReadFieldBegin() (byte, int16, error) {
 	compactType, err := p.ReadByte()
 	if err != nil {
@@ -455,7 +455,7 @@ func (p *compactProtocolReader) ReadFieldBegin() (byte, int16, error) {
 	return fieldType, fieldID, nil
 }
 
-// Read a map header off the wire. If the size is zero, skip reading the key
+// ReadMapBegin reads a map header off the wire. If the size is zero, skip reading the key
 // and value type. This means that 0-length maps will yield TMaps without the
 // "correct" types.
 func (p *compactProtocolReader) ReadMapBegin() (byte, byte, int, error) {
@@ -473,7 +473,7 @@ func (p *compactProtocolReader) ReadMapBegin() (byte, byte, int, error) {
 	return compactTypeToThriftType[keyAndValueType>>4], compactTypeToThriftType[keyAndValueType&0x0f], int(size), nil
 }
 
-// Read a list header off the wire. If the list size is 0-14, the size will
+// ReadListBegin reads a list header off the wire. If the list size is 0-14, the size will
 // be packed into the element type header. If it's a longer list, the 4 MSB
 // of the element type header will be 0xF, and a varint will follow with the
 // true size.
@@ -493,7 +493,7 @@ func (p *compactProtocolReader) ReadListBegin() (byte, int, error) {
 	return compactTypeToThriftType[sizeAndType&0x0f], size, nil
 }
 
-// Read a set header off the wire. If the set size is 0-14, the size will
+// ReadSetBegin reads a set header off the wire. If the set size is 0-14, the size will
 // be packed into the element type header. If it's a longer set, the 4 MSB
 // of the element type header will be 0xF, and a varint will follow with the
 // true size.
@@ -501,7 +501,7 @@ func (p *compactProtocolReader) ReadSetBegin() (byte, int, error) {
 	return p.ReadListBegin()
 }
 
-// Read a boolean off the wire. If this is a boolean field, the value should
+// ReadBool reads a boolean off the wire. If this is a boolean field, the value should
 // already have been read during readFieldBegin, so we'll just consume the
 // pre-stored value. Otherwise, read a byte.
 func (p *compactProtocolReader) ReadBool() (bool, error) {
@@ -515,7 +515,7 @@ func (p *compactProtocolReader) ReadBool() (bool, error) {
 	return res, nil
 }
 
-// Read a single byte off the wire. Nothing interesting here.
+// ReadByte reads a single byte off the wire. Nothing interesting here.
 func (p *compactProtocolReader) ReadByte() (byte, error) {
 	b := p.buf
 	_, err := io.ReadFull(p.r, b[:1])
