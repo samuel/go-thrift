@@ -53,7 +53,10 @@ func (p *Parser) ParseFile(filename string) (map[string]*Thrift, string, error) 
 		if err != nil {
 			return nil, "", err
 		}
-		thrift, err := p.Parse(rd)
+		thrift, err := p.Parse(rd, func(pp *parser) Option {
+			pp.filename = path
+			return nil
+		})
 		if err != nil {
 			return nil, "", err
 		}

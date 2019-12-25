@@ -6,8 +6,11 @@ enum MyEnum {
 }
 
 const map<MyEnum, string> STRINGY = {
-	MyEnum.FIRST: "1st",
+	MyEnum.FIRST: "1st"
 	MyEnum.SECOND: "2nd",
 }
 
 const i32 Fst = MyEnum.FIRST;
+
+const bool Bt = true;
+const bool Bf = false;

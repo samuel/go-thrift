@@ -9,11 +9,43 @@ import (
 var _ = fmt.Sprintf
 
 type Binary []byte
+
+func (e Binary) Ptr() *Binary { return &e }
+
 type Int32 int32
+
+func (e Int32) Ptr() *Int32 { return &e }
+
 type String string
+
+func (e String) Ptr() *String { return &e }
 
 type St struct {
 	B *Binary `thrift:"1,required" json:"b"`
 	S *String `thrift:"2,required" json:"s"`
 	I *Int32  `thrift:"3,required" json:"i"`
+}
+
+func (s *St) GetB() (val Binary) {
+	if s != nil && s.B != nil {
+		return *s.B
+	}
+
+	return
+}
+
+func (s *St) GetS() (val String) {
+	if s != nil && s.S != nil {
+		return *s.S
+	}
+
+	return
+}
+
+func (s *St) GetI() (val Int32) {
+	if s != nil && s.I != nil {
+		return *s.I
+	}
+
+	return
 }

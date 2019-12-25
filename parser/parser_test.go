@@ -191,10 +191,12 @@ func TestServiceParsing(t *testing.T) {
 			"ADD": &EnumValue{
 				Name:  "ADD",
 				Value: 1,
+				Set:   true,
 			},
 			"SUBTRACT": &EnumValue{
 				Name:  "SUBTRACT",
 				Value: 2,
+				Set:   true,
 			},
 		},
 	}
@@ -348,6 +350,7 @@ func TestParseEnumAnnotations(t *testing.T) {
 				"TWO": &EnumValue{
 					Name:        "TWO",
 					Value:       2,
+					Set:         true,
 					Annotations: []*Annotation{{"a2", "v2"}},
 				},
 				"THREE": &EnumValue{

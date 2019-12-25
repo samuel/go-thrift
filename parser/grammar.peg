@@ -107,7 +107,7 @@ Include ← "include" _ file:Literal EOS {
 
 Statement ← Include / Namespace / Const / Enum / TypeDef / Struct / Exception / Union / Service
 
-Namespace ← "namespace" _ scope:[*a-z.-]+ _ ns:Identifier EOS {
+Namespace ← "namespace" _ scope:[*a-z0-9.-]+ _ ns:Identifier EOS {
 	return &namespace{
 		scope: ifaceSliceToString(scope),
 		namespace: string(ns.(Identifier)),
@@ -135,7 +135,7 @@ Enum ← "enum" _ name:Identifier __ '{' __ values:(EnumValue __)* '}' _ annotat
 	next := 0
 	for _, v := range vs {
 		ev := v.([]interface{})[0].(*EnumValue)
-		if ev.Value < 0 {
+		if !ev.Set {
 			ev.Value = next
 		}
 		if ev.Value >= next {
@@ -149,11 +149,11 @@ Enum ← "enum" _ name:Identifier __ '{' __ values:(EnumValue __)* '}' _ annotat
 EnumValue ← name:Identifier _ value:('=' _ IntConstant)? _ annotations:TypeAnnotations? ListSeparator? {
 	ev := &EnumValue{
 		Name: string(name.(Identifier)),
-		Value: -1,
 		Annotations: toAnnotations(annotations),
 	}
 	if value != nil {
 		ev.Value = int(value.([]interface{})[2].(int64))
+		ev.Set = true
 	}
 	return ev, nil
 }
@@ -183,15 +183,31 @@ StructLike ← name:Identifier __ '{' __ fields:FieldList '}' _ annotations:Type
 FieldList ← fields:(Field __)* {
 	fs := fields.([]interface{})
 	flds := make([]*Field, len(fs))
+	ids := make(map[int]bool, len(fs))
 	for i, f := range fs {
 		flds[i] = f.([]interface{})[0].(*Field)
+
+		if ids[flds[i].ID] {
+			return nil, fmt.Errorf("multiple fields with the same identifier: %d", flds[i].ID)
+		}
+
+		ids[flds[i].ID] = true
 	}
 	return flds, nil
 }
 
-Field ← id:IntConstant _ ':' _ req:FieldReq? _ typ:FieldType _ name:Identifier __ def:('=' _ ConstValue)? _ annotations:TypeAnnotations? ListSeparator? {
+FieldID ← id:IntConstant _ ':' {
+	return int(id.(int64)), nil
+}
+
+Field ← id:FieldID? _ req:FieldReq? _ typ:FieldType __ name:Identifier __ def:('=' _ ConstValue)? _ annotations:TypeAnnotations? ListSeparator? {
+	parsedID := -1
+	if id != nil {
+		parsedID = id.(int)
+	}
+
 	f := &Field{
-		ID       : int(id.(int64)),
+		ID       : parsedID,
 		Name     : string(name.(Identifier)),
 		Type     : typ.(*Type),
 		Annotations: toAnnotations(annotations),
@@ -290,7 +306,7 @@ ContainerType ← typ:(MapType / SetType / ListType) {
 	return typ, nil
 }
 
-MapType ← CppType? "map" WS "<" WS key:FieldType WS "," WS value:FieldType WS ">" _ annotations:TypeAnnotations? {
+MapType ← CppType? "map" WS "<" WS key:FieldType WS "," __ value:FieldType WS ">" _ annotations:TypeAnnotations? {
 	return &Type{
 		Name: "map",
 		KeyType: key.(*Type),
@@ -319,7 +335,7 @@ CppType ← "cpp_type" cppType:Literal {
 	return cppType, nil
 }
 
-ConstValue ← Literal / DoubleConstant / IntConstant / ConstMap / ConstList / Identifier
+ConstValue ← Literal / DoubleConstant / IntConstant / BoolConstant / ConstMap / ConstList / Identifier
 
 TypeAnnotations ← '(' __ annotations:TypeAnnotation* ')' {
 	var anns []*Annotation
@@ -340,6 +356,10 @@ TypeAnnotation ← name:Identifier _ value:('=' __ value:Literal { return value,
 	}, nil
 }
 
+BoolConstant ← ("true" / "false") {
+	return string(c.text) == "true", nil
+}
+
 IntConstant ← [-+]? Digit+ {
 	return strconv.ParseInt(string(c.text), 10, 64)
 }
@@ -357,7 +377,7 @@ ConstList ← '[' __ values:(ConstValue __ ListSeparator? __)* __ ']' {
 	return vs, nil
 }
 
-ConstMap ← '{' __ values:(ConstValue __ ':' __ ConstValue __ (',' / &'}') __)* '}' {
+ConstMap ← '{' __ values:(ConstValue __ ':' __ ConstValue __ (','? / &'}') __)* '}' {
 	if values == nil {
 		return nil, nil
 	}

@@ -6,6 +6,7 @@ package thrift
 
 import (
 	"encoding/binary"
+	"errors"
 	"io"
 	"math"
 )
@@ -277,6 +278,14 @@ func (p *binaryProtocolReader) ReadFieldEnd() error {
 	return nil
 }
 
+func (p *binaryProtocolReader) validateSize(sz int) bool {
+	if fr, ok := p.r.(*FramedReadWriteCloser); ok {
+		return sz <= fr.rbuf.Len()
+	}
+
+	return true
+}
+
 func (p *binaryProtocolReader) ReadMapBegin() (keyType byte, valueType byte, size int, err error) {
 	if keyType, err = p.ReadByte(); err != nil {
 		return
@@ -287,6 +296,10 @@ func (p *binaryProtocolReader) ReadMapBegin() (keyType byte, valueType byte, siz
 	var sz int32
 	sz, err = p.ReadI32()
 	size = int(sz)
+
+	if !p.validateSize(size) {
+		err = errors.New("map is too large")
+	}
 	return
 }
 
@@ -301,6 +314,10 @@ func (p *binaryProtocolReader) ReadListBegin() (elementType byte, size int, err 
 	var sz int32
 	sz, err = p.ReadI32()
 	size = int(sz)
+
+	if !p.validateSize(size) {
+		err = errors.New("list is too large")
+	}
 	return
 }
 
