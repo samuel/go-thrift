@@ -198,7 +198,12 @@ func (g *GoGenerator) formatType(pkg string, thrift *parser.Thrift, typ *parser.
 		if pkg != g.pkg {
 			name = pkg + "." + name
 		}
-		return ptr + name
+		// for reference types like map or list we don't use pointers
+		if t.RefType() {
+			return name
+		} else {
+			return ptr + name
+		}
 	}
 	if e := thrift.Enums[typ.Name]; e != nil {
 		name := e.Name
