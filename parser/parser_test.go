@@ -115,9 +115,11 @@ func TestServiceParsing(t *testing.T) {
 		Name: "SomeStruct",
 		Fields: []*Field{
 			{
-				ID:      1,
-				Name:    "dbl",
-				Default: 1.2,
+				ID:       1,
+				Name:     "dbl",
+				Required: true,
+				Explicit: false,
+				Default:  1.2,
 				Type: &Type{
 					Name: "double",
 				},
@@ -125,7 +127,8 @@ func TestServiceParsing(t *testing.T) {
 			{
 				ID:       2,
 				Name:     "abc",
-				Optional: true,
+				Required: false,
+				Explicit: true,
 				Type: &Type{
 					Name: "string",
 				},
@@ -145,7 +148,7 @@ func TestServiceParsing(t *testing.T) {
 				ID:       1,
 				Name:     "dbl",
 				Default:  1.1,
-				Optional: true,
+				Required: false,
 				Type: &Type{
 					Name: "double",
 				},
@@ -154,7 +157,7 @@ func TestServiceParsing(t *testing.T) {
 				ID:       2,
 				Name:     "str",
 				Default:  "2",
-				Optional: true,
+				Required: false,
 				Type: &Type{
 					Name: "string",
 				},
@@ -163,7 +166,7 @@ func TestServiceParsing(t *testing.T) {
 				ID:       3,
 				Name:     "int32",
 				Default:  int64(3),
-				Optional: true,
+				Required: false,
 				Type: &Type{
 					Name: "i32",
 				},
@@ -172,7 +175,7 @@ func TestServiceParsing(t *testing.T) {
 				ID:       4,
 				Name:     "int64",
 				Default:  int64(5),
-				Optional: true,
+				Required: false,
 				Type: &Type{
 					Name: "i64",
 				},
@@ -228,7 +231,7 @@ func TestServiceParsing(t *testing.T) {
 						&Field{
 							ID:       1,
 							Name:     "password",
-							Optional: false,
+							Required: true,
 							Type: &Type{
 								Name: "string",
 							},
@@ -238,7 +241,7 @@ func TestServiceParsing(t *testing.T) {
 						&Field{
 							ID:       1,
 							Name:     "authex",
-							Optional: true,
+							Required: false,
 							Type: &Type{
 								Name: "AuthenticationException",
 							},
@@ -381,7 +384,8 @@ func TestParseFieldAnnotations(t *testing.T) {
 				&Field{
 					ID:          1,
 					Name:        "f1",
-					Optional:    true,
+					Required:    false,
+					Explicit:    true,
 					Type:        &Type{Name: "i32"},
 					Annotations: []*Annotation{{"a1", "v1"}},
 				},
@@ -418,13 +422,15 @@ func TestParseStructLikeAnnotations(t *testing.T) {
 		&Field{
 			ID:       1,
 			Name:     "f1",
-			Optional: true,
+			Required: false,
+			Explicit: true,
 			Type:     &Type{Name: "i32"},
 		},
 		&Field{
 			ID:       2,
 			Name:     "f2",
-			Optional: true,
+			Required: false,
+			Explicit: true,
 			Type:     &Type{Name: "string"},
 		},
 	}
@@ -472,9 +478,11 @@ func TestParseServiceAnnotations(t *testing.T) {
 					Name: "foo",
 					Arguments: []*Field{
 						&Field{
-							ID:   1,
-							Name: "f1",
-							Type: &Type{Name: "i32"},
+							ID:       1,
+							Name:     "f1",
+							Required: true,
+							Explicit: false,
+							Type:     &Type{Name: "i32"},
 						},
 					},
 					Annotations: []*Annotation{{"a1", "v1"}},

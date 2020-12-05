@@ -40,7 +40,7 @@ func ifaceSliceToString(v interface{}) string {
 func unionToStruct(u union) *Struct {
 	st := (*Struct)(u)
 	for _, f := range st.Fields {
-		f.Optional = true
+		f.Required = false
 	}
 	return st
 }
@@ -196,8 +196,13 @@ Field ← id:IntConstant _ ':' _ req:FieldReq? _ typ:FieldType _ name:Identifier
 		Type     : typ.(*Type),
 		Annotations: toAnnotations(annotations),
 	}
+	f.Required = true
 	if req != nil && !req.(bool) {
-		f.Optional = true
+		f.Required = false
+	}
+	f.Explicit = true
+	if req == nil {
+		f.Explicit = false
 	}
 	if def != nil {
 		f.Default = def.([]interface{})[2]
@@ -247,7 +252,7 @@ Function ← oneway:("oneway" __)? typ:FunctionType __ name:Identifier _ '(' __ 
 	if exceptions != nil {
 		m.Exceptions = exceptions.([]*Field)
 		for _, e := range m.Exceptions {
-			e.Optional = true
+			e.Required = false
 		}
 	}
 	return m, nil

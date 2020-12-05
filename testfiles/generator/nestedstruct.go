@@ -9,11 +9,11 @@ import (
 var _ = fmt.Sprintf
 
 type NestedColor struct {
-	Rgb *Rgb `thrift:"1,required" json:"rgb"`
+	Rgb *Rgb `thrift:"1,required,implicit" json:"rgb"`
 }
 
 type Rgb struct {
-	Red   *int32 `thrift:"1,required" json:"red"`
-	Green *int32 `thrift:"2,required" json:"green"`
-	Blue  *int32 `thrift:"3,required" json:"blue"`
+	Red   *int32 `thrift:"1,required,implicit" json:"red"`
+	Green *int32 `thrift:"2,required,implicit" json:"green"`
+	Blue  *int32 `thrift:"3,required,implicit" json:"blue"`
 }
