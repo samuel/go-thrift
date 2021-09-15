@@ -15,11 +15,16 @@ type Decoder interface {
 }
 
 type decoder struct {
-	r ProtocolReader
+	r               ProtocolReader
+	enforceRequired bool
 }
 
 // DecodeStruct tries to deserialize a struct from a Thrift stream
 func DecodeStruct(r ProtocolReader, v interface{}) (err error) {
+	return DecodeStructWithStrictness(r, true, v)
+}
+
+func DecodeStructWithStrictness(r ProtocolReader, enforceRequired bool, v interface{}) (err error) {
 	if de, ok := v.(Decoder); ok {
 		return de.DecodeThrift(r)
 	}
@@ -32,7 +37,7 @@ func DecodeStruct(r ProtocolReader, v interface{}) (err error) {
 			err = r.(error)
 		}
 	}()
-	d := &decoder{r}
+	d := &decoder{r: r, enforceRequired: enforceRequired}
 	vo := reflect.ValueOf(v)
 	for vo.Kind() != reflect.Ptr {
 		d.error(&UnsupportedValueError{Value: vo, Str: "pointer to struct expected"})
@@ -173,13 +178,15 @@ func (d *decoder) readValue(thriftType byte, rf reflect.Value) {
 			d.error(err)
 		}
 
-		if req != 0 {
-			for i := 0; req != 0; i, req = i+1, req>>1 {
-				if req&1 != 0 {
-					d.error(&MissingRequiredField{
-						StructName: v.Type().Name(),
-						FieldName:  meta.fields[i].name,
-					})
+		if d.enforceRequired {
+			if req != 0 {
+				for i := 0; req != 0; i, req = i+1, req>>1 {
+					if req&1 != 0 {
+						d.error(&MissingRequiredField{
+							StructName: v.Type().Name(),
+							FieldName:  meta.fields[i].name,
+						})
+					}
 				}
 			}
 		}
