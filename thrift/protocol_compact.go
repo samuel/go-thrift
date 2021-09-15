@@ -267,7 +267,7 @@ func (p *compactProtocolWriter) WriteI64(value int64) error {
 
 func (p *compactProtocolWriter) WriteDouble(value float64) (err error) {
 	b := p.buf
-	binary.BigEndian.PutUint64(b, math.Float64bits(value))
+	binary.LittleEndian.PutUint64(b, math.Float64bits(value))
 	_, err = p.w.Write(b[:8])
 	return
 }
@@ -540,7 +540,7 @@ func (p *compactProtocolReader) ReadI64() (int64, error) {
 func (p *compactProtocolReader) ReadDouble() (float64, error) {
 	b := p.buf
 	_, err := io.ReadFull(p.r, b[:8])
-	value := math.Float64frombits(binary.BigEndian.Uint64(b))
+	value := math.Float64frombits(binary.LittleEndian.Uint64(b))
 	return value, err
 }
 
