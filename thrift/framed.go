@@ -78,6 +78,7 @@ func (f *FramedReadWriteCloser) fillBuffer() error {
 	}
 	frameSize := int64(binary.BigEndian.Uint32(f.rtmp))
 	if frameSize > f.maxFrameSize {
+		f.wbuf.Reset()
 		return ErrFrameTooBig{frameSize, f.maxFrameSize}
 	}
 	f.limitedReader.N = frameSize
@@ -97,6 +98,7 @@ func (f *FramedReadWriteCloser) Write(p []byte) (int, error) {
 		return n, err
 	}
 	if ln := int64(f.wbuf.Len()); ln > f.maxFrameSize {
+		f.wbuf.Reset()
 		return n, &ErrFrameTooBig{ln, f.maxFrameSize}
 	}
 	return n, nil
