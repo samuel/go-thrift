@@ -7,6 +7,7 @@ package thrift
 import (
 	"errors"
 	"io"
+	"log"
 	"net/rpc"
 	"strings"
 	"sync"
@@ -78,7 +79,13 @@ func (c *serverCodec) ReadRequestBody(thriftStruct interface{}) error {
 	return c.conn.ReadMessageEnd()
 }
 
-func (c *serverCodec) WriteResponse(response *rpc.Response, thriftStruct interface{}) error {
+func (c *serverCodec) WriteResponse(response *rpc.Response, thriftStruct interface{}) (err error) {
+	defer func() {
+		if err != nil {
+			log.Printf("thrift server error: %v", err)
+		}
+	}()
+
 	c.mu.Lock()
 	methodName := c.methodName[response.Seq]
 	delete(c.methodName, response.Seq)

@@ -9,6 +9,8 @@ import (
 
 var _ = fmt.Sprintf
 
+const Bf = false
+const Bt = true
 const Fst = MyEnumFirst
 
 var Stringy = map[MyEnum]string{
@@ -59,4 +61,8 @@ func (e *MyEnum) UnmarshalJSON(b []byte) error {
 	i, err := strconv.Atoi(st)
 	*e = MyEnum(i)
 	return err
+}
+
+func (e MyEnum) Ptr() *MyEnum {
+	return &e
 }

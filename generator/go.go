@@ -13,25 +13,30 @@ import (
 	"fmt"
 	"go/format"
 	"io"
+	"log"
 	"os"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
+	"text/template"
 
 	"github.com/samuel/go-thrift/parser"
 )
 
 var (
-	flagGoBinarystring = flag.Bool("go.binarystring", false, "Always use string for binary instead of []byte")
-	flagGoImportPrefix = flag.String("go.importprefix", "", "Prefix for Thrift-generated go package imports")
-	flagGoJSONEnumnum  = flag.Bool("go.json.enumnum", false, "For JSON marshal enums by number instead of name")
-	flagGoPointers     = flag.Bool("go.pointers", false, "Make all fields pointers")
-	flagGoSignedBytes  = flag.Bool("go.signedbytes", false, "Interpret Thrift byte as Go signed int8 type")
+	flagGoBinarystring    = flag.Bool("go.binarystring", false, "Always use string for binary instead of []byte")
+	flagGoJSONEnumnum     = flag.Bool("go.json.enumnum", false, "For JSON marshal enums by number instead of name")
+	flagGoPointers        = flag.Bool("go.pointers", false, "Make all fields pointers")
+	flagGoImportPrefix    = flag.String("go.importprefix", "", "Prefix for thrift-generated go package imports")
+	flagGoGenerateMethods = flag.Bool("go.generate", false, "Add testing/quick compatible Generate methods to enum types")
+	flagGoSignedBytes     = flag.Bool("go.signedbytes", false, "Interpret Thrift byte as Go signed int8 type")
+	flagGoRPCContext      = flag.Bool("go.rpccontext", false, "Add context.Context objects to rpc wrappers")
 )
 
 var (
-	goNamespaceOrder = []string{"go", "perl", "py", "cpp", "rb", "java"}
+	goNamespaceOrder = []string{"go", "perl", "py", "cpp", "rb", "java", "cpp2"}
 )
 
 type ErrUnknownType string
@@ -60,6 +65,9 @@ type GoGenerator struct {
 	Format      bool
 	Pointers    bool
 	SignedBytes bool
+
+	// package names imported
+	packageNames map[string]bool
 }
 
 var goKeywords = map[string]bool{
@@ -88,6 +96,13 @@ var goKeywords = map[string]bool{
 	"import":      true,
 	"return":      true,
 	"var":         true,
+
+	// request arguments are hardcoded to 'req' and the response to 'res'
+	"req": true,
+	"res": true,
+	// ctx is passed as the first argument, SetContext methods are generated iff flagGoRPCContext is set
+	"ctx":        true,
+	"SetContext": true,
 }
 
 var basicTypes = map[string]bool{
@@ -187,14 +202,14 @@ func (g *GoGenerator) formatType(pkg string, thrift *parser.Thrift, typ *parser.
 		valueType := g.formatKeyType(pkg, thrift, typ.ValueType)
 		return "map[" + valueType + "]struct{}"
 	case "list":
-		return "[]" + g.formatType(pkg, thrift, typ.ValueType, 0)
+		return "[]" + g.formatType(pkg, thrift, typ.ValueType, toNoPointer)
 	case "map":
 		keyType := g.formatKeyType(pkg, thrift, typ.KeyType)
 		return "map[" + keyType + "]" + g.formatType(pkg, thrift, typ.ValueType, toNoPointer)
 	}
 
 	if t := thrift.Typedefs[typ.Name]; t != nil {
-		name := typ.Name
+		name := camelCase(typ.Name)
 		if pkg != g.pkg {
 			name = pkg + "." + name
 		}
@@ -212,21 +227,21 @@ func (g *GoGenerator) formatType(pkg string, thrift *parser.Thrift, typ *parser.
 		if pkg != g.pkg {
 			name = pkg + "." + name
 		}
-		return "*" + name
+		return ptr + name
 	}
 	if e := thrift.Exceptions[typ.Name]; e != nil {
 		name := e.Name
 		if pkg != g.pkg {
 			name = pkg + "." + name
 		}
-		return "*" + name
+		return ptr + name
 	}
 	if u := thrift.Unions[typ.Name]; u != nil {
 		name := u.Name
 		if pkg != g.pkg {
 			name = pkg + "." + name
 		}
-		return "*" + name
+		return ptr + name
 	}
 
 	g.error(ErrUnknownType(typ.Name))
@@ -254,6 +269,10 @@ func (g *GoGenerator) resolveType(typ *parser.Type) string {
 	return typ.Name
 }
 
+func isContainer(typ *parser.Type) bool {
+	return typ.Name == "map" || typ.Name == "list" || typ.Name == "set" || (!*flagGoBinarystring && typ.Name == "binary")
+}
+
 func (g *GoGenerator) formatField(field *parser.Field) string {
 	tags := ""
 	jsonTags := ""
@@ -269,6 +288,50 @@ func (g *GoGenerator) formatField(field *parser.Field) string {
 	return fmt.Sprintf(
 		"%s %s `thrift:\"%d%s\" json:\"%s%s\"`",
 		camelCase(field.Name), g.formatType(g.pkg, g.thrift, field.Type, opt), field.ID, tags, field.Name, jsonTags)
+}
+
+var getterTmpl = template.Must(template.New("").Parse(`func ({{ .Receiver }} *{{ .Typ }}) Get{{ .Field }}() (val {{ .FieldTyp }}) {
+	if {{ .Receiver }} != nil {{ if .Ptr }}&& {{ .Receiver }}.{{ .Field }} != nil{{ end }} {
+		return {{ if .Ptr }}*{{ end }}{{ .Receiver }}.{{ .Field }}
+	}
+
+{{ if .Zero }}
+	val = {{ .Zero }}
+{{ end }}
+	return
+}
+`))
+
+func (g *GoGenerator) formatFieldGetter(receiver, typ string, field *parser.Field) string {
+	buf := new(bytes.Buffer)
+
+	zero := ""
+	if field.Default != nil {
+		var err error
+		zero, err = g.formatValue(field.Default, field.Type)
+		if err != nil {
+			g.error(err)
+		}
+	}
+
+	isPtr := (g.Pointers || field.Optional) && !isContainer(field.Type)
+	if err := getterTmpl.Execute(buf, struct {
+		Receiver, Typ   string
+		Field, FieldTyp string
+		Zero            string
+		Ptr             bool
+	}{
+		Receiver: receiver,
+		Typ:      typ,
+		Field:    camelCase(field.Name),
+		FieldTyp: g.formatType(g.pkg, g.thrift, field.Type, toNoPointer),
+		Zero:     zero,
+		Ptr:      isPtr,
+	}); err != nil {
+		g.error(err)
+	}
+
+	return buf.String()
 }
 
 func (g *GoGenerator) formatArguments(arguments []*parser.Field) string {
@@ -302,7 +365,18 @@ func (g *GoGenerator) formatValue(v interface{}, t *parser.Type) (string, error)
 		return strconv.Quote(v2), nil
 	case int:
 		return strconv.Itoa(v2), nil
+	case bool:
+		if v2 {
+			return "true", nil
+		}
+		return "false", nil
 	case int64:
+		if t.Name == "bool" {
+			if v2 == 0 {
+				return "false", nil
+			}
+			return "true", nil
+		}
 		return strconv.FormatInt(v2, 10), nil
 	case float64:
 		return strconv.FormatFloat(v2, 'f', -1, 64), nil
@@ -326,10 +400,11 @@ func (g *GoGenerator) formatValue(v interface{}, t *parser.Type) (string, error)
 		return buf.String(), nil
 	case []parser.KeyValue:
 		buf := &bytes.Buffer{}
-		buf.WriteString(g.formatType(g.pkg, g.thrift, t, 0))
+		buf.WriteString(g.formatType(g.pkg, g.thrift, t, toNoPointer))
 		buf.WriteString("{\n")
 		for _, kv := range v2 {
 			buf.WriteString("\t\t")
+
 			s, err := g.formatValue(kv.Key, t.KeyType)
 			if err != nil {
 				return "", err
@@ -340,19 +415,30 @@ func (g *GoGenerator) formatValue(v interface{}, t *parser.Type) (string, error)
 			if err != nil {
 				return "", err
 			}
+
+			// struct values are pointers
+			if t.ValueType == nil && *flagGoPointers {
+				s += ".Ptr()"
+			}
+
 			buf.WriteString(s)
 			buf.WriteString(",\n")
 		}
 		buf.WriteString("\t}")
 		return buf.String(), nil
 	case parser.Identifier:
-		parts := strings.SplitN(string(v2), ".", 2)
-		if len(parts) == 1 {
-			return camelCase(parts[0]), nil
+		ident := string(v2)
+		idx := strings.LastIndex(ident, ".")
+		if idx == -1 {
+			return camelCase(ident), nil
 		}
 
-		resolved := parts[0] + camelCase(parts[1])
-		return resolved, nil
+		scope := ident[:idx]
+		if g.packageNames[scope] {
+			scope += "."
+		}
+
+		return scope + camelCase(ident[idx+1:]), nil
 	}
 	return "", fmt.Errorf("unsupported value type %T", v)
 }
@@ -429,27 +515,72 @@ func (e *%s) UnmarshalJSON(b []byte) error {
 }
 `, enumName, enumName, enumName, enumName)
 
+	g.write(out, `
+func (e %s) Ptr() *%s {
+	return &e
+}
+`, enumName, enumName)
+
+	if *flagGoGenerateMethods {
+		valueStrings := make([]string, 0, len(enum.Values))
+		for _, val := range enum.Values {
+			valueStrings = append(valueStrings, strconv.FormatInt(int64(val.Value), 10))
+		}
+		sort.Strings(valueStrings)
+		valueStringsName := strings.ToLower(enumName) + "Values"
+
+		g.write(out, `
+var %s = []int32{%s}
+
+func (e *%s) Generate(rand *rand.Rand, size int) reflect.Value {
+	v := %s(%s[rand.Intn(%d)])
+	return reflect.ValueOf(&v)
+}
+`, valueStringsName, strings.Join(valueStrings, ", "), enumName, enumName, valueStringsName, len(valueNames))
+	}
+
 	return nil
 }
 
-func (g *GoGenerator) writeStruct(out io.Writer, st *parser.Struct) error {
+func (g *GoGenerator) writeStruct(out io.Writer, st *parser.Struct, includeContext bool) error {
 	structName := camelCase(st.Name)
 
 	g.write(out, "\ntype %s struct {\n", structName)
+	if includeContext {
+		g.write(out, "\tctx context.Context\n")
+	}
+
 	for _, field := range st.Fields {
 		g.write(out, "\t%s\n", g.formatField(field))
 	}
-	return g.write(out, "}\n")
+	g.write(out, "}\n")
+
+	receiver := strings.ToLower(structName[:1])
+
+	// generate Get methods for all fields
+	for _, field := range st.Fields {
+		g.write(out, "%s\n", g.formatFieldGetter(receiver, structName, field))
+	}
+
+	if includeContext {
+		g.write(out, `
+func (%s *%s) SetContext(ctx context.Context) {
+	%s.ctx = ctx
+}
+`, receiver, structName, receiver)
+	}
+
+	return g.write(out, "\n")
 }
 
 func (g *GoGenerator) writeException(out io.Writer, ex *parser.Struct) error {
-	if err := g.writeStruct(out, ex); err != nil {
+	if err := g.writeStruct(out, ex, false); err != nil {
 		return err
 	}
 
 	exName := camelCase(ex.Name)
 
-	g.write(out, "\nfunc (e *%s) Error() string {\n", exName)
+	g.write(out, "\nfunc (e %s) Error() string {\n", exName)
 	if len(ex.Fields) == 0 {
 		g.write(out, "\treturn \"%s{}\"\n", exName)
 	} else {
@@ -457,7 +588,7 @@ func (g *GoGenerator) writeException(out io.Writer, ex *parser.Struct) error {
 		fieldVars := make([]string, len(ex.Fields))
 		for i, field := range ex.Fields {
 			fieldNames[i] = camelCase(field.Name) + ": %+v"
-			fieldVars[i] = "e." + camelCase(field.Name)
+			fieldVars[i] = "e.Get" + camelCase(field.Name) + "()"
 		}
 		g.write(out, "\treturn fmt.Sprintf(\"%s{%s}\", %s)\n",
 			exName, strings.Join(fieldNames, ", "), strings.Join(fieldVars, ", "))
@@ -472,14 +603,19 @@ func (g *GoGenerator) writeService(out io.Writer, svc *parser.Service) error {
 
 	g.write(out, "\ntype %s interface {\n", svcName)
 	if svc.Extends != "" {
-		g.write(out, "\t%s\n", camelCase(svc.Extends))
+		g.write(out, "\t%s\n", svc.Extends)
 	}
 	methodNames := sortedKeys(svc.Methods)
 	for _, k := range methodNames {
 		method := svc.Methods[k]
+		args := g.formatArguments(method.Arguments)
+		if *flagGoRPCContext {
+			args = "ctx context.Context, " + args
+		}
+
 		g.write(out,
 			"\t%s(%s) %s\n",
-			camelCase(method.Name), g.formatArguments(method.Arguments),
+			camelCase(method.Name), args,
 			g.formatReturnType(method.ReturnType, false))
 	}
 	g.write(out, "}\n")
@@ -489,7 +625,7 @@ func (g *GoGenerator) writeService(out io.Writer, svc *parser.Service) error {
 	if svc.Extends == "" {
 		g.write(out, "\ntype %sServer struct {\n\tImplementation %s\n}\n", svcName, svcName)
 	} else {
-		g.write(out, "\ntype %sServer struct {\n\t%sServer\n\tImplementation %s\n}\n", svcName, camelCase(svc.Extends), svcName)
+		g.write(out, "\ntype %sServer struct {\n\t%sServer\n\tImplementation %s\n}\n", svcName, svc.Extends, svcName)
 	}
 
 	// Server method wrappers
@@ -497,12 +633,21 @@ func (g *GoGenerator) writeService(out io.Writer, svc *parser.Service) error {
 	for _, k := range methodNames {
 		method := svc.Methods[k]
 		mName := camelCase(method.Name)
+
+		requestStructName := "InternalRPC" + svcName + camelCase(method.Name) + "Request"
+		responseStructName := "InternalRPC" + svcName + camelCase(method.Name) + "Response"
+
 		resArg := ""
 		if !method.Oneway {
-			resArg = fmt.Sprintf(", res *%s%sResponse", svcName, mName)
+			resArg = fmt.Sprintf(", res *%s", responseStructName)
 		}
-		g.write(out, "\nfunc (s *%sServer) %s(req *%s%sRequest%s) error {\n", svcName, mName, svcName, mName, resArg)
+		g.write(out, "\nfunc (s *%sServer) %s(req *%s%s) error {\n", svcName, mName, requestStructName, resArg)
 		var args []string
+
+		if *flagGoRPCContext {
+			args = append(args, "req.ctx")
+		}
+
 		for _, arg := range method.Arguments {
 			aName := camelCase(arg.Name)
 			args = append(args, "req."+aName)
@@ -516,12 +661,12 @@ func (g *GoGenerator) writeService(out io.Writer, svc *parser.Service) error {
 		if len(method.Exceptions) > 0 {
 			g.write(out, "\tswitch e := err.(type) {\n")
 			for _, ex := range method.Exceptions {
-				g.write(out, "\tcase %s:\n\t\tres.%s = e\n\t\terr = nil\n", g.formatType(g.pkg, g.thrift, ex.Type, 0), camelCase(ex.Name))
+				g.write(out, "\tcase %s:\n\t\tres.%s = e\n\t\terr = nil\n", g.formatType(g.pkg, g.thrift, ex.Type, toOptional), camelCase(ex.Name))
 			}
 			g.write(out, "\t}\n")
 		}
 		if !isVoid {
-			if !g.Pointers && basicTypes[g.resolveType(method.ReturnType)] {
+			if !g.Pointers && !isContainer(method.ReturnType) {
 				g.write(out, "\tres.Value = &val\n")
 			} else {
 				g.write(out, "\tres.Value = val\n")
@@ -533,13 +678,16 @@ func (g *GoGenerator) writeService(out io.Writer, svc *parser.Service) error {
 	for _, k := range methodNames {
 		// Request struct
 		method := svc.Methods[k]
-		reqStructName := svcName + camelCase(method.Name) + "Request"
-		if err := g.writeStruct(out, &parser.Struct{Name: reqStructName, Fields: method.Arguments}); err != nil {
+
+		requestStructName := "InternalRPC" + svcName + camelCase(method.Name) + "Request"
+		responseStructName := "InternalRPC" + svcName + camelCase(method.Name) + "Response"
+
+		if err := g.writeStruct(out, &parser.Struct{Name: requestStructName, Fields: method.Arguments}, *flagGoRPCContext); err != nil {
 			return err
 		}
 
 		if method.Oneway {
-			g.write(out, "\nfunc (r *%s) Oneway() bool {\n\treturn true\n}\n", reqStructName)
+			g.write(out, "\nfunc (r *%s) Oneway() bool {\n\treturn true\n}\n", requestStructName)
 		} else {
 			// Response struct
 			args := make([]*parser.Field, 0, len(method.Exceptions))
@@ -549,8 +697,8 @@ func (g *GoGenerator) writeService(out io.Writer, svc *parser.Service) error {
 			for _, ex := range method.Exceptions {
 				args = append(args, ex)
 			}
-			res := &parser.Struct{Name: svcName + camelCase(method.Name) + "Response", Fields: args}
-			if err := g.writeStruct(out, res); err != nil {
+			res := &parser.Struct{Name: responseStructName, Fields: args}
+			if err := g.writeStruct(out, res, false); err != nil {
 				return err
 			}
 		}
@@ -559,13 +707,17 @@ func (g *GoGenerator) writeService(out io.Writer, svc *parser.Service) error {
 	if svc.Extends == "" {
 		g.write(out, "\ntype %sClient struct {\n\tClient RPCClient\n}\n", svcName)
 	} else {
-		g.write(out, "\ntype %sClient struct {\n\t%sClient\n}\n", svcName, camelCase(svc.Extends))
+		g.write(out, "\ntype %sClient struct {\n\t%sClient\n}\n", svcName, svc.Extends)
 	}
 
 	for _, k := range methodNames {
 		method := svc.Methods[k]
+
+		requestStructName := "InternalRPC" + svcName + camelCase(method.Name) + "Request"
+		responseStructName := "InternalRPC" + svcName + camelCase(method.Name) + "Response"
+
 		methodName := camelCase(method.Name)
-		returnType := "err error"
+		returnType := "(err error)"
 		if !method.Oneway {
 			returnType = g.formatReturnType(method.ReturnType, true)
 		}
@@ -575,7 +727,7 @@ func (g *GoGenerator) writeService(out io.Writer, svc *parser.Service) error {
 			returnType)
 
 		// Request
-		g.write(out, "\treq := &%s%sRequest{\n", svcName, methodName)
+		g.write(out, "\treq := &%s{\n", requestStructName)
 		for _, arg := range method.Arguments {
 			g.write(out, "\t\t%s: %s,\n", camelCase(arg.Name), validGoIdent(lowerCamelCase(arg.Name)))
 		}
@@ -586,7 +738,7 @@ func (g *GoGenerator) writeService(out io.Writer, svc *parser.Service) error {
 			// g.write(out, "\tvar res *%s%sResponse = nil\n", svcName, methodName)
 			g.write(out, "\tvar res interface{} = nil\n")
 		} else {
-			g.write(out, "\tres := &%s%sResponse{}\n", svcName, methodName)
+			g.write(out, "\tres := &%s{}\n", responseStructName)
 		}
 
 		// Call
@@ -603,7 +755,7 @@ func (g *GoGenerator) writeService(out io.Writer, svc *parser.Service) error {
 		}
 
 		if method.ReturnType != nil && method.ReturnType.Name != "void" {
-			if !g.Pointers && basicTypes[g.resolveType(method.ReturnType)] {
+			if !g.Pointers && !isContainer(method.ReturnType) {
 				g.write(out, "\tif err == nil && res.Value != nil {\n\t ret = *res.Value\n}\n")
 			} else {
 				g.write(out, "\tif err == nil {\n\tret = res.Value\n}\n")
@@ -614,6 +766,26 @@ func (g *GoGenerator) writeService(out io.Writer, svc *parser.Service) error {
 	}
 
 	return nil
+}
+
+var validMapKeys = map[string]bool{
+	"string": true,
+	"i32":    true,
+	"i64":    true,
+	"bool":   true,
+	"double": true,
+}
+
+func (g *GoGenerator) isValidGoType(typ *parser.Type) bool {
+	if typ.KeyType == nil {
+		return true
+	}
+
+	if _, ok := g.thrift.Enums[g.resolveType(typ.KeyType)]; ok {
+		return true
+	}
+
+	return validMapKeys[g.resolveType(typ.KeyType)]
 }
 
 func (g *GoGenerator) generateSingle(out io.Writer, thriftPath string, thrift *parser.Thrift) {
@@ -628,7 +800,16 @@ func (g *GoGenerator) generateSingle(out io.Writer, thriftPath string, thrift *p
 	imports := []string{"fmt"}
 	if len(thrift.Enums) > 0 {
 		imports = append(imports, "strconv")
+
+		if *flagGoGenerateMethods {
+			imports = append(imports, "math/rand", "reflect")
+		}
 	}
+
+	if len(thrift.Services) > 0 && *flagGoRPCContext {
+		imports = append(imports, "golang.org/x/net/context")
+	}
+
 	if len(thrift.Includes) > 0 {
 		for _, path := range thrift.Includes {
 			pkg := g.Packages[path].Name
@@ -656,12 +837,19 @@ func (g *GoGenerator) generateSingle(out io.Writer, thriftPath string, thrift *p
 		for _, k := range sortedKeys(thrift.Typedefs) {
 			t := thrift.Typedefs[k]
 			g.write(out, "type %s %s\n", camelCase(k), g.formatType(g.pkg, g.thrift, t.Type, toNoPointer))
+			g.write(out, fmt.Sprintf("func (e %s) Ptr() *%s { return &e }\n", camelCase(k), camelCase(k)))
 		}
 	}
 
 	if len(thrift.Constants) > 0 {
 		for _, k := range sortedKeys(thrift.Constants) {
 			c := thrift.Constants[k]
+
+			if !g.isValidGoType(c.Type) {
+				log.Printf("Skipping generation for constant %s - type is not a valid go type (%s)\n", c.Name, g.resolveType(c.Type.KeyType))
+				continue
+			}
+
 			v, err := g.formatValue(c.Value, c.Type)
 			if err != nil {
 				g.error(err)
@@ -685,7 +873,7 @@ func (g *GoGenerator) generateSingle(out io.Writer, thriftPath string, thrift *p
 
 	for _, k := range sortedKeys(thrift.Structs) {
 		st := thrift.Structs[k]
-		if err := g.writeStruct(out, st); err != nil {
+		if err := g.writeStruct(out, st, false); err != nil {
 			g.error(err)
 		}
 	}
@@ -699,7 +887,7 @@ func (g *GoGenerator) generateSingle(out io.Writer, thriftPath string, thrift *p
 
 	for _, k := range sortedKeys(thrift.Unions) {
 		un := thrift.Unions[k]
-		if err := g.writeStruct(out, un); err != nil {
+		if err := g.writeStruct(out, un, false); err != nil {
 			g.error(err)
 		}
 	}
@@ -724,7 +912,8 @@ func (g *GoGenerator) Generate(outPath string) (err error) {
 
 	// Generate package namespace mapping if necessary
 	if g.Packages == nil {
-		g.Packages = make(map[string]GoPackage)
+		g.Packages = map[string]GoPackage{}
+		g.packageNames = map[string]bool{}
 	}
 	for path, th := range g.ThriftFiles {
 		if pkg, ok := g.Packages[path]; !ok || pkg.Name == "" {
@@ -745,6 +934,7 @@ func (g *GoGenerator) Generate(outPath string) (err error) {
 			}
 			pkg.Name = validIdentifier(strings.ToLower(pkg.Name), "_")
 			g.Packages[path] = pkg
+			g.packageNames[pkg.Name] = true
 		}
 	}
 
@@ -758,6 +948,10 @@ func (g *GoGenerator) Generate(outPath string) (err error) {
 				filename = filename[:i]
 			}
 		}
+		if strings.HasSuffix(filename, "_test") {
+			filename = filename[:len(filename)-len("_test")]
+		}
+
 		filename += ".go"
 		pkgpath := filepath.Join(outPath, pkg.Path, pkg.Name)
 		outfile := filepath.Join(pkgpath, filename)
