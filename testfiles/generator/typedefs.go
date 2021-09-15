@@ -10,10 +10,78 @@ var _ = fmt.Sprintf
 
 type Binary []byte
 type Int32 int32
+type Map1 map[int32]string
+type Map2 map[int32]Map1
 type String string
 
 type St struct {
 	B *Binary `thrift:"1,required" json:"b"`
 	S *String `thrift:"2,required" json:"s"`
 	I *Int32  `thrift:"3,required" json:"i"`
+}
+
+type Svc interface {
+	Call(name *string, map1 Map1, data *Binary) (Map2, error)
+	Ping() (*Binary, error)
+}
+
+type SvcServer struct {
+	Implementation Svc
+}
+
+func (s *SvcServer) Call(req *SvcCallRequest, res *SvcCallResponse) error {
+	val, err := s.Implementation.Call(req.Name, req.Map1, req.Data)
+	res.Value = val
+	return err
+}
+
+func (s *SvcServer) Ping(req *SvcPingRequest, res *SvcPingResponse) error {
+	val, err := s.Implementation.Ping()
+	res.Value = val
+	return err
+}
+
+type SvcCallRequest struct {
+	Name *string `thrift:"1,required" json:"name"`
+	Map1 Map1    `thrift:"2,required" json:"map1"`
+	Data *Binary `thrift:"3,required" json:"data"`
+}
+
+type SvcCallResponse struct {
+	Value Map2 `thrift:"0" json:"value,omitempty"`
+}
+
+type SvcPingRequest struct {
+}
+
+type SvcPingResponse struct {
+	Value *Binary `thrift:"0" json:"value,omitempty"`
+}
+
+type SvcClient struct {
+	Client RPCClient
+}
+
+func (s *SvcClient) Call(name *string, map1 Map1, data *Binary) (ret Map2, err error) {
+	req := &SvcCallRequest{
+		Name: name,
+		Map1: map1,
+		Data: data,
+	}
+	res := &SvcCallResponse{}
+	err = s.Client.Call("call", req, res)
+	if err == nil {
+		ret = res.Value
+	}
+	return
+}
+
+func (s *SvcClient) Ping() (ret *Binary, err error) {
+	req := &SvcPingRequest{}
+	res := &SvcPingResponse{}
+	err = s.Client.Call("ping", req, res)
+	if err == nil {
+		ret = res.Value
+	}
+	return
 }

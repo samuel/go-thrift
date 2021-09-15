@@ -104,3 +104,8 @@ func (t *Type) String() string {
 	}
 	return t.Name
 }
+
+// return true for reference types (map, list, set)
+func (t *Type) RefType() bool {
+	return t.KeyType != nil || t.ValueType != nil
+}
