@@ -9,6 +9,6 @@ import (
 var _ = fmt.Sprintf
 
 type ByteAndListByte struct {
-	AByte     int8   `thrift:"1,required" json:"a_byte"`
-	AListByte []int8 `thrift:"2,required" json:"a_list_byte"`
+	AByte     int8   `thrift:"1,required,implicit" json:"a_byte"`
+	AListByte []int8 `thrift:"2,required,implicit" json:"a_list_byte"`
 }
