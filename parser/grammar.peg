@@ -266,7 +266,7 @@ Throws ← "throws" __ '(' __ exceptions:FieldList ')' {
 
 FieldType ← typ:(BaseType / ContainerType / Identifier) {
 	if t, ok := typ.(Identifier); ok {
-		return &Type{Name: string(t)}, nil
+		return &Type{Name: string(t), Identifier: string(t)}, nil
 	}
 	return typ, nil
 }
@@ -278,6 +278,7 @@ DefinitionType ← typ:(BaseType / ContainerType) {
 BaseType ← name:BaseTypeName _ annotations:TypeAnnotations? {
 	return &Type{
 		Name: name.(string),
+		BaseType: name.(string),
 		Annotations: toAnnotations(annotations),
 	}, nil
 }

@@ -8,6 +8,8 @@ import "fmt"
 
 type Type struct {
 	Name        string
+	BaseType    string
+	Identifier  string
 	KeyType     *Type // If map
 	ValueType   *Type // If map, list, or set
 	Annotations []*Annotation
