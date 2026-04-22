@@ -253,7 +253,7 @@ Function ← oneway:("oneway" __)? typ:FunctionType __ name:Identifier _ '(' __ 
 	return m, nil
 }
 
-FunctionType ← typ:("void" / FieldType) {
+FunctionType ← typ:(("void" !IdentifierChar) / FieldType) {
 	if t, ok := typ.(*Type); ok {
 		return t, nil
 	}
@@ -282,7 +282,7 @@ BaseType ← name:BaseTypeName _ annotations:TypeAnnotations? {
 	}, nil
 }
 
-BaseTypeName ← ("bool" / "byte" / "i16" / "i32" / "i64" / "double" / "string" / "binary" ) {
+BaseTypeName ← ("bool" / "byte" / "i16" / "i32" / "i64" / "double" / "string" / "binary" ) !IdentifierChar {
 	return string(c.text), nil
 }
 
@@ -380,10 +380,11 @@ Literal ← (('"' (`\"` / [^"])* '"') / ('\'' (`\'` / [^'])* '\'')) {
 	return strconv.Unquote(string(c.text))
 }
 
-Identifier ← (Letter / '_')+ (Letter / Digit / [._])* {
+Identifier ← (Letter / '_')+ IdentifierChar* {
 	return Identifier(string(c.text)), nil
 }
 
+IdentifierChar ← Letter / Digit / [._]
 ListSeparator ← [,;]
 Letter ← [A-Za-z]
 Digit ← [0-9]
