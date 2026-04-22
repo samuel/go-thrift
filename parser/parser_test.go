@@ -488,6 +488,36 @@ func TestParseServiceAnnotations(t *testing.T) {
 	}
 }
 
+func TestParseQualifiedTypesWithBaseTypePrefixes(t *testing.T) {
+	thrift, err := parse(`
+		service S {
+			bytepkg.Resp ByteFoo(1: bytepkg.Req req)
+			boolpkg.Resp BoolPrefix(1: bytepkg.Req req)
+			stringpkg.Resp StringPrefix(1: binarypkg.Req req)
+			voidpkg.Resp VoidPrefix(1: Req req)
+		}
+	`)
+	if err != nil {
+		t.Fatalf("Parse qualified service types failed: %v", err)
+	}
+
+	service := thrift.Services["S"]
+	if service == nil {
+		t.Fatalf("service S not parsed: %+v", thrift.Services)
+	}
+	for _, method := range []string{"ByteFoo", "BoolPrefix", "StringPrefix", "VoidPrefix"} {
+		if service.Methods[method] == nil {
+			t.Fatalf("method %s not parsed: %+v", method, service.Methods)
+		}
+	}
+	if got := service.Methods["ByteFoo"].ReturnType.Name; got != "bytepkg.Resp" {
+		t.Fatalf("unexpected return type: %s", got)
+	}
+	if got := service.Methods["ByteFoo"].Arguments[0].Type.Name; got != "bytepkg.Req" {
+		t.Fatalf("unexpected arg type: %s", got)
+	}
+}
+
 func TestParseConstant(t *testing.T) {
 	thrift, err := parse(`
 		const string C1 = "test"
